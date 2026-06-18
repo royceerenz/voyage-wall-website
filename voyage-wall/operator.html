@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Voyage Wall Operator | Ella & Zyrus Wedding</title>
+    <meta
+      name="description"
+      content="Direct operator controls for the Ella and Zyrus Voyage Wall event."
+    >
+    <link rel="stylesheet" href="./src/css/styles.css">
+  </head>
+  <body class="operator-page">
+    <main class="operator-shell">
+      <section class="section admin-section" aria-labelledby="admin-title">
+        <div class="admin-card">
+          <div>
+            <p class="eyebrow eyebrow--dark">Operator</p>
+            <h1 class="operator-title" id="admin-title">Live Event Controls</h1>
+            <p>
+              Direct controls for the Ella &amp; Zyrus Voyage Wall. This page is
+              intentionally separate from the guest page and should be protected
+              with authentication when Supabase is added.
+            </p>
+          </div>
+
+          <div class="admin-stats" aria-label="Event memory summary">
+            <span><strong id="total-count">0</strong>Total memories</span>
+            <span><strong id="approved-count">0</strong>Approved</span>
+            <span><strong id="hidden-count">0</strong>Hidden</span>
+          </div>
+
+          <div class="admin-actions">
+            <button class="button button--secondary" type="button" id="toggle-submissions">
+              Close submissions
+            </button>
+            <button class="button button--ghost" type="button" id="copy-link">
+              Copy guest event link
+            </button>
+          </div>
+
+          <p class="admin-status" id="admin-status" role="status">
+            Submissions are open.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <script src="./src/js/operator.js"></script>
+  </body>
+</html>

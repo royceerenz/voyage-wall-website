@@ -1,0 +1,115 @@
+-- Voyage Wall Supabase Schema Planning Draft
+-- This file is documentation-first and not intended to be run as a production migration yet.
+-- Final SQL should be reviewed after MVP requirements, moderation rules, and auth strategy are approved.
+
+-- Planned entities:
+-- 1. events
+--    Stores one wedding or celebration instance.
+--
+--    Suggested fields:
+--    - id: uuid primary key
+--    - slug: public event slug used in guest URLs
+--    - couple_names: display name such as "Ella & Zyrus"
+--    - event_title: optional title such as "Ella & Zyrus Wedding"
+--    - event_date: wedding date
+--    - hero_image_path: optional storage path
+--    - theme_key: selected visual theme
+--    - moderation_mode: instant, review_first, or paused
+--    - is_active: whether public submissions are open
+--    - submissions_open: whether guests can add new memories
+--    - wall_visible: whether approved memories can be viewed publicly
+--    - max_upload_mb: event-specific upload size limit if needed
+--    - created_at
+--    - updated_at
+
+-- 2. memories
+--    Stores guest-submitted memories.
+--
+--    Suggested fields:
+--    - id: uuid primary key
+--    - event_id: references events(id)
+--    - guest_name: optional display name
+--    - message: guest message
+--    - image_path: storage path for uploaded image
+--    - display_image_path: optimized public display image path
+--    - thumb_image_path: optional thumbnail path
+--    - image_width: optional metadata
+--    - image_height: optional metadata
+--    - upload_state: created, uploading, processed, failed
+--    - status: pending, approved, hidden, deleted
+--    - submitted_ip_hash: optional abuse-prevention metadata
+--    - user_agent_summary: optional debugging metadata
+--    - client_submission_id: optional idempotency key from client
+--    - created_at
+--    - updated_at
+
+-- 3. submission_rate_limits or submission_events
+--    Optional operational table if rate limiting is not handled outside Supabase.
+--
+--    Suggested fields:
+--    - id: uuid primary key
+--    - event_id: references events(id)
+--    - request_fingerprint_hash
+--    - submission_count
+--    - window_start
+--    - created_at
+--    - updated_at
+
+-- 4. admin_users
+--    Optional future table if custom admin roles are needed beyond Supabase auth.
+--
+--    Suggested fields:
+--    - id: uuid primary key
+--    - auth_user_id: references auth.users(id)
+--    - display_name
+--    - created_at
+
+-- 5. event_admins
+--    Joins admins to events.
+--
+--    Suggested fields:
+--    - event_id: references events(id)
+--    - admin_user_id: references admin_users(id)
+--    - role: owner, editor, moderator, viewer
+--    - created_at
+
+-- 6. moderation_actions
+--    Audit trail for admin decisions.
+--
+--    Suggested fields:
+--    - id: uuid primary key
+--    - memory_id: references memories(id)
+--    - admin_user_id: references admin_users(id)
+--    - action: approved, hidden, deleted, restored
+--    - note: optional moderation note
+--    - created_at
+
+-- Suggested indexes:
+-- - events.slug unique index
+-- - memories.event_id, created_at descending
+-- - memories.event_id, status, created_at descending
+-- - memories.client_submission_id unique per event when present
+-- - event_admins.event_id
+-- - event_admins.admin_user_id
+
+-- Suggested row-level security approach:
+-- - Public guests can read approved memories for active public events.
+-- - Public guests can insert memories only for active events with submissions_open = true.
+-- - Public inserts should not be able to set approved status unless instant mode is implemented safely.
+-- - Admin users can read and manage events they are assigned to.
+-- - Storage access should be constrained by event and memory ownership rules where possible.
+-- - Hidden, deleted, failed, and pending memories must never appear in public Love Wall queries unless the event is explicitly in a preview/admin context.
+
+-- Suggested status lifecycle:
+-- - pending: submitted but not public yet
+-- - approved: visible on Love Wall
+-- - hidden: not visible publicly, retained for admin review
+-- - deleted: soft-deleted or removed depending on final privacy policy
+
+-- Open decisions before final migration:
+-- - Should instant-mode submissions write directly as approved, or should a backend function decide? Recommended: backend function decides from event.moderation_mode.
+-- - Are guest names stored as plain text, optional, or omitted?
+-- - How long are original uploads retained? Recommended: retain through event archive period, then couple-controlled deletion.
+-- - Is there a separate optimized image rendition path? Recommended: yes, display_image_path is required for public wall performance.
+-- - Is admin auth required for MVP? Recommended: yes for any hide/delete/close-submissions controls.
+-- - Where is rate limiting enforced: edge function, app server, Supabase policy, or external service?

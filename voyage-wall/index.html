@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Voyage Wall | Ella & Zyrus Wedding</title>
+    <meta
+      name="description"
+      content="Share wedding photos and messages on Ella and Zyrus' Voyage Wall."
+    >
+    <link rel="stylesheet" href="./src/css/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <nav class="top-nav" aria-label="Primary">
+        <div class="top-nav__inner">
+          <a class="top-nav__brand" href="#home">Ella &amp; Zyrus</a>
+          <a class="top-nav__cta" href="#share" data-open-share>Share Moment</a>
+        </div>
+      </nav>
+
+      <header class="hero" id="home" aria-labelledby="hero-title">
+        <video
+          class="hero__video"
+          aria-hidden="true"
+          autoplay
+          muted
+          loop
+          playsinline
+          preload="metadata"
+          poster="./assets/mockups/voyage-wall-hero.png"
+        >
+          <source src="./assets/mockups/weddinghero.mp4" type="video/mp4">
+        </video>
+        <div class="hero__image" aria-hidden="true"></div>
+        <div class="hero__wash" aria-hidden="true"></div>
+        <div class="hero-illustration" aria-hidden="true"></div>
+        <div class="hero-band hero-band--top" aria-hidden="true"></div>
+        <div class="hero-band hero-band--middle" aria-hidden="true"></div>
+
+        <div class="hero__content">
+          <p class="eyebrow">Ella &amp; Zyrus</p>
+          <h1 id="hero-title">Voyage Wall</h1>
+          <p class="hero__copy">A Collection of Memories From Our Special Day</p>
+          <a class="button button--primary hero__cta liquid-glass-cta" href="#share" data-open-share>
+            <span>Share A Moment</span>
+          </a>
+        </div>
+
+        <a class="scroll-cue" href="#wall">Scroll to view shared moments</a>
+      </header>
+
+      <main>
+        <section class="section wall-section" id="wall" aria-labelledby="wall-title">
+          <div class="wall-section__header">
+            <div>
+              <p class="eyebrow eyebrow--dark">Love Wall</p>
+              <h2 id="wall-title">Shared Moments</h2>
+              <p>Newest memories from the celebration, gathered in one place.</p>
+            </div>
+          </div>
+
+          <div class="memory-grid" id="memory-grid" aria-live="polite"></div>
+
+          <div class="load-more">
+            <button class="button button--ghost" type="button" id="load-more">
+              Load more moments
+            </button>
+          </div>
+        </section>
+
+        <section class="thank-you-section" aria-labelledby="thank-you-title" data-scroll-reveal>
+          <div class="thank-you-section__divider" aria-hidden="true"></div>
+          <div class="thank-you-card">
+            <div class="thank-you-card__watermark" aria-hidden="true"></div>
+            <p class="thank-you-label">OUR GRATITUDE</p>
+            <h2 id="thank-you-title">Thank You For Being Part Of Our Journey</h2>
+            <div class="thank-you-copy">
+              <p>
+                Every photo, message, and memory shared here becomes part of a story
+                we will treasure for years to come.
+              </p>
+              <p>
+                Thank you for celebrating with us, for your kind words, and for
+                helping make this day even more meaningful.
+              </p>
+              <p>
+                This collection of memories will always remind us of the people who
+                shared this special chapter of our lives.
+              </p>
+            </div>
+            <p class="thank-you-signature">
+              <span>With love,</span>
+              Ella &amp; Zyrus
+            </p>
+          </div>
+        </section>
+
+        <footer class="site-footer" aria-label="Voyage Wall footer">
+          <section class="event-footer" aria-label="Event footer">
+            <p class="event-footer__brand">VOYAGE WALL</p>
+            <p class="event-footer__couple">
+              A digital memory wall for<br>
+              Ella &amp; Zyrus
+            </p>
+            <p class="event-footer__note">Made with love for this special day.</p>
+            <p class="event-footer__copyright">&copy; 2026 Ella &amp; Zyrus</p>
+          </section>
+
+          <section class="product-signature" aria-label="Voyage Wall signature">
+            <p class="product-signature__title">Created with Voyage Wall</p>
+            <p>Preserving memories, one celebration at a time.</p>
+            <p>
+              Interested in creating a memory wall for your own wedding, birthday,
+              reunion, debut, baptism, or special event?
+            </p>
+            <a href="mailto:bigleteroycee@gmail.com">bigleteroycee@gmail.com</a>
+          </section>
+        </footer>
+
+      </main>
+
+      <a class="floating-share" href="#share" aria-label="Share a memory" data-open-share>+</a>
+      <button class="memory-toast is-hidden" type="button" id="memory-toast" aria-live="polite">
+        <span>New moment added</span>
+        <strong>View</strong>
+      </button>
+    </div>
+
+    <dialog class="share-dialog" id="share-dialog" aria-labelledby="share-title">
+      <button class="dialog-close" type="button" id="share-dialog-close" aria-label="Close share form">
+        &times;
+      </button>
+
+      <div class="share-dialog__body" id="share">
+        <div class="section__header modal-header">
+          <p class="eyebrow eyebrow--dark">Guest Memory</p>
+          <h2 id="share-title">Share a memory for Ella &amp; Zyrus</h2>
+          <p>
+            Add one photo, write a short message, and your moment will join the
+            wall for everyone celebrating with us.
+          </p>
+        </div>
+
+        <form class="memory-form" id="memory-form" novalidate>
+          <div class="form-card">
+            <label class="upload-card" for="photo-input" id="upload-card">
+              <input id="photo-input" name="photo" type="file" accept="image/*">
+              <span class="upload-card__icon" aria-hidden="true">+</span>
+              <span class="upload-card__title">Add a photo</span>
+              <span class="upload-card__hint">Take a photo or choose from your library</span>
+              <span class="upload-card__meta">JPG, PNG, or HEIC where supported</span>
+            </label>
+
+            <div class="preview-card is-hidden" id="preview-card" aria-live="polite">
+              <img id="preview-image" alt="Selected memory preview">
+              <div>
+                <p id="preview-name">Selected photo</p>
+                <button class="text-button" type="button" id="replace-photo">Replace photo</button>
+              </div>
+            </div>
+
+            <p class="field-error" id="photo-error" role="alert"></p>
+
+            <label class="field">
+              <span>Message for the couple</span>
+              <textarea
+                id="message-input"
+                name="message"
+                maxlength="280"
+                rows="5"
+                placeholder="Write a sweet note, favorite moment, or wish for their voyage ahead."
+              ></textarea>
+            </label>
+            <div class="field-row">
+              <p class="field-error" id="message-error" role="alert"></p>
+              <p class="char-count"><span id="message-count">0</span>/280</p>
+            </div>
+
+            <label class="field">
+              <span>Your name <em>optional</em></span>
+              <input
+                id="name-input"
+                name="guestName"
+                maxlength="40"
+                placeholder="A guest"
+                autocomplete="name"
+              >
+            </label>
+
+            <p class="privacy-note">
+              Memories may be visible to anyone with this event link.
+            </p>
+
+            <button class="button button--primary button--wide" type="submit" id="submit-memory">
+              Share to the Love Wall
+            </button>
+          </div>
+        </form>
+
+        <section class="success-panel is-hidden" id="success-panel" aria-live="polite">
+          <div class="success-panel__mark" aria-hidden="true">&#10003;</div>
+          <h2>Your memory has joined the wall</h2>
+          <p>Thank you for being part of our voyage.</p>
+          <div class="success-panel__actions">
+            <a class="button button--primary" href="#wall" id="view-wall-after-submit">View Love Wall</a>
+            <button class="button button--secondary" type="button" id="share-another">
+              Share Another Memory
+            </button>
+          </div>
+        </section>
+      </div>
+    </dialog>
+
+    <dialog class="memory-dialog" id="memory-dialog">
+      <button class="dialog-close" type="button" id="dialog-close" aria-label="Close memory">
+        &times;
+      </button>
+      <img id="dialog-image" alt="">
+      <div class="memory-dialog__body">
+        <p id="dialog-message"></p>
+        <p id="dialog-name"></p>
+      </div>
+    </dialog>
+
+    <script src="./src/js/app.js"></script>
+  </body>
+</html>
