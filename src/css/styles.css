@@ -795,6 +795,21 @@ h2 {
   gap: 18px;
 }
 
+.wall-status {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 28px;
+  border: 1px solid rgba(23, 48, 74, 0.1);
+  border-radius: var(--radius);
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.68);
+  text-align: center;
+}
+
+.wall-status--error {
+  color: #8a2d2d;
+}
+
 .memory-card {
   overflow: hidden;
   border: 1px solid rgba(23, 48, 74, 0.1);

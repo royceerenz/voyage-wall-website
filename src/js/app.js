@@ -29,7 +29,13 @@ const viewWallAfterSubmit = document.querySelector("#view-wall-after-submit");
 const revealSections = document.querySelectorAll("[data-scroll-reveal]");
 const heroVideo = document.querySelector(".hero__video");
 
+const SUPABASE_URL = "https://xitflvwtobrqmvdkeyjz.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XbTe1Nsvr_iIaEfhEI_B1g_g8wCmd5m";
+const MEMORY_TABLE = "memories";
+const PHOTO_BUCKET = "memory-photos";
+
 let selectedPhoto = null;
+let selectedPhotoFile = null;
 let selectedPhotoName = "";
 let visibleCount = 6;
 let submissionsOpen = true;
@@ -68,61 +74,121 @@ function closeModalWithAnimation(modal) {
   }, 350);
 }
 
-const seedMemories = [
-  {
-    id: "m1",
-    image: "./assets/mockups/voyage-wall-hero.png",
-    message: "Watching you two walk toward forever was the softest, happiest moment.",
-    name: "Mara"
-  },
-  {
-    id: "m2",
-    image: "./assets/mockups/memory-toast.png",
-    message: "To laughter, calm seas, and a lifetime of choosing each other.",
-    name: "Nico"
-  },
-  {
-    id: "m3",
-    image: "./assets/mockups/memory-dance.png",
-    message: "The ceremony felt like a love letter everyone got to stand inside.",
-    name: "Auntie Rose"
-  },
-  {
-    id: "m4",
-    image: "./assets/mockups/memory-rings.png",
-    message: "May every new shore bring you closer, kinder, and more in love.",
-    name: "Paolo"
-  },
-  {
-    id: "m5",
-    image: "./assets/mockups/voyage-wall-hero.png",
-    message: "This day is glowing because you both are.",
-    name: "Lea"
-  },
-  {
-    id: "m6",
-    image: "./assets/mockups/memory-toast.png",
-    message: "From this dock to every horizon after it, we are cheering for you.",
-    name: "The Santos Family"
-  },
-  {
-    id: "m7",
-    image: "./assets/mockups/memory-dance.png",
-    message: "Best dance floor entrance, best smiles, best beginning.",
-    name: "Jules"
-  },
-  {
-    id: "m8",
-    image: "./assets/mockups/memory-rings.png",
-    message: "A beautiful day for a beautiful promise.",
-    name: "A guest"
-  }
-];
+let memories = [];
 
-let memories = [...seedMemories];
+function supabaseHeaders(extraHeaders = {}) {
+  return {
+    apikey: SUPABASE_PUBLISHABLE_KEY,
+    Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+    ...extraHeaders
+  };
+}
+
+function mapSupabaseMemory(row) {
+  const displayName = row.anonymous ? "A guest" : row.name || "A guest";
+
+  return {
+    id: String(row.id),
+    image: row.photo_url,
+    photo_url: row.photo_url,
+    message: row.message || "",
+    name: displayName,
+    anonymous: Boolean(row.anonymous),
+    created_at: row.created_at
+  };
+}
+
+function publicStorageUrl(path) {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  return `${SUPABASE_URL}/storage/v1/object/public/${PHOTO_BUCKET}/${encodedPath}`;
+}
+
+function getFileExtension(file) {
+  const nameExtension = file.name.split(".").pop();
+  if (nameExtension && nameExtension !== file.name) return nameExtension.toLowerCase();
+  return file.type.split("/").pop() || "jpg";
+}
+
+function createUniquePhotoPath(file) {
+  const extension = getFileExtension(file);
+  const uniqueId = crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `public/${uniqueId}.${extension}`;
+}
+
+async function uploadPhoto(file) {
+  const filePath = createUniquePhotoPath(file);
+  const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
+  const uploadResponse = await fetch(`${SUPABASE_URL}/storage/v1/object/${PHOTO_BUCKET}/${encodedPath}`, {
+    method: "POST",
+    headers: supabaseHeaders({
+      "Content-Type": file.type || "application/octet-stream",
+      "x-upsert": "false"
+    }),
+    body: file
+  });
+
+  if (!uploadResponse.ok) {
+    const details = await uploadResponse.text();
+    throw new Error(details || "Photo upload failed.");
+  }
+
+  return publicStorageUrl(filePath);
+}
+
+async function insertMemory(memoryPayload) {
+  const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/${MEMORY_TABLE}`, {
+    method: "POST",
+    headers: supabaseHeaders({
+      "Content-Type": "application/json",
+      Prefer: "return=representation"
+    }),
+    body: JSON.stringify(memoryPayload)
+  });
+
+  if (!insertResponse.ok) {
+    const details = await insertResponse.text();
+    throw new Error(details || "Memory save failed.");
+  }
+
+  const insertedRows = await insertResponse.json();
+  return mapSupabaseMemory(insertedRows[0]);
+}
+
+async function loadMemories() {
+  memoryGrid.innerHTML = '<p class="wall-status">Loading shared memories...</p>';
+
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${MEMORY_TABLE}?select=*&order=created_at.desc`, {
+      headers: supabaseHeaders()
+    });
+
+    if (!response.ok) {
+      const details = await response.text();
+      throw new Error(details || "Could not load memories.");
+    }
+
+    const rows = await response.json();
+    memories = rows.map(mapSupabaseMemory);
+    visibleCount = 6;
+    renderMemories();
+  } catch (error) {
+    memoryGrid.innerHTML = `
+      <p class="wall-status wall-status--error">
+        We could not load the Love Wall yet. Please refresh and try again.
+      </p>
+    `;
+    console.error(error);
+  }
+}
 
 function renderMemories() {
   memoryGrid.innerHTML = "";
+  if (memories.length === 0) {
+    memoryGrid.innerHTML = '<p class="wall-status">No memories have been shared yet.</p>';
+    loadMore.classList.add("is-hidden");
+    return;
+  }
+
   memories.slice(0, visibleCount).forEach((memory) => {
     const card = document.createElement("article");
     card.className = `memory-card${memory.id === highlightedMemoryId ? " is-new" : ""}`;
@@ -232,7 +298,11 @@ function closeShareDialog() {
 
 function resetFormState() {
   form.reset();
+  if (selectedPhoto) {
+    URL.revokeObjectURL(selectedPhoto);
+  }
   selectedPhoto = null;
+  selectedPhotoFile = null;
   selectedPhotoName = "";
   previewImage.removeAttribute("src");
   previewCard.classList.add("is-hidden");
@@ -252,7 +322,11 @@ photoInput.addEventListener("change", () => {
     return;
   }
 
+  if (selectedPhoto) {
+    URL.revokeObjectURL(selectedPhoto);
+  }
   selectedPhoto = URL.createObjectURL(file);
+  selectedPhotoFile = file;
   selectedPhotoName = file.name;
   previewImage.src = selectedPhoto;
   previewName.textContent = selectedPhotoName;
@@ -271,7 +345,7 @@ messageInput.addEventListener("input", () => {
   }
 });
 
-form.addEventListener("submit", (event) => {
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   if (!submissionsOpen) {
@@ -283,7 +357,7 @@ form.addEventListener("submit", (event) => {
   const name = nameInput.value.trim() || "A guest";
   let isValid = true;
 
-  if (!selectedPhoto) {
+  if (!selectedPhotoFile) {
     setError(photoError, "Please add a photo before sharing.");
     isValid = false;
   } else {
@@ -302,23 +376,31 @@ form.addEventListener("submit", (event) => {
   submitMemory.disabled = true;
   submitMemory.textContent = "Adding this to the wall...";
 
-  window.setTimeout(() => {
-    const memory = {
-      id: `guest-${Date.now()}`,
-      image: selectedPhoto,
+  try {
+    const anonymous = !nameInput.value.trim();
+    const photoUrl = await uploadPhoto(selectedPhotoFile);
+    const memory = await insertMemory({
+      photo_url: photoUrl,
       message,
-      name
-    };
+      name: anonymous ? null : name,
+      anonymous
+    });
+
     memories.unshift(memory);
     highlightedMemoryId = memory.id;
+    revealedMemoryIds.delete(memory.id);
     visibleCount = Math.max(visibleCount, 6);
     renderMemories();
-    form.classList.add("is-hidden");
-    successPanel.classList.remove("is-hidden");
+    resetFormState();
+    closeShareDialog();
+    document.querySelector("#wall").scrollIntoView({ behavior: "smooth" });
+  } catch (error) {
+    setError(photoError, "This memory could not be shared yet. Please try again.");
+    console.error(error);
+  } finally {
     submitMemory.disabled = false;
     submitMemory.textContent = "Share to the Love Wall";
-    resetFormState();
-  }, 850);
+  }
 });
 
 shareAnother.addEventListener("click", () => {
@@ -374,17 +456,6 @@ dialog.addEventListener("click", (event) => {
   }
 });
 
-window.setTimeout(() => {
-  pendingRealtimeMemory = {
-    id: "realtime-1",
-    image: "./assets/mockups/memory-toast.png",
-    message: "A fresh little moment from cocktail hour just joined the voyage.",
-    name: "Camille"
-  };
-  memoryToast.classList.remove("is-hidden");
-  window.requestAnimationFrame(() => memoryToast.classList.add("is-visible"));
-}, 7000);
-
 window.addEventListener("scroll", () => {
   const showFloatingShare = window.scrollY > window.innerHeight * 0.78;
   floatingShare.classList.toggle("is-visible", showFloatingShare);
@@ -405,4 +476,4 @@ if ("IntersectionObserver" in window) {
   revealSections.forEach((section) => section.classList.add("is-visible"));
 }
 
-renderMemories();
+loadMemories();
