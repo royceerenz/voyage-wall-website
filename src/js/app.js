@@ -140,12 +140,14 @@ async function uploadPhoto(file) {
     });
 
   if (error) {
+    console.log("storage error", error);
+    console.error("[Voyage Wall] Complete Supabase storage error object.", error);
     console.error("[Voyage Wall] Supabase photo upload failed.", {
       bucket: PHOTO_BUCKET,
       path: filePath,
       error
     });
-    throw new Error(error.message || "Photo upload failed.");
+    throw new Error(`Storage upload failed: ${error.message || "Photo upload failed."}`);
   }
 
   console.log("upload result", data);
@@ -161,33 +163,43 @@ async function uploadPhoto(file) {
 }
 
 async function insertMemory(memoryPayload) {
+  const allowedInsertPayload = {
+    photo_url: memoryPayload.photo_url,
+    message: memoryPayload.message,
+    name: memoryPayload.name,
+    anonymous: memoryPayload.anonymous
+  };
+
+  console.log("insert payload", allowedInsertPayload);
+  console.log("insert payload keys", Object.keys(allowedInsertPayload));
   console.info("[Voyage Wall] Inserting memory row.", {
     table: MEMORY_TABLE,
-    payload: memoryPayload
+    payload: allowedInsertPayload
   });
 
   const { data, error } = await supabase
     .from(MEMORY_TABLE)
-    .insert(memoryPayload)
+    .insert(allowedInsertPayload)
     .select("id, photo_url, message, name, anonymous, created_at")
     .single();
 
   if (error) {
     console.log("insert error", error);
+    console.error("[Voyage Wall] Complete Supabase insert error object.", error);
     console.error("[Voyage Wall] Supabase memory insert failed.", {
       table: MEMORY_TABLE,
-      payload: memoryPayload,
+      payload: allowedInsertPayload,
       error
     });
-    throw new Error(error.message || "Memory save failed.");
+    throw new Error(`Insert failed: ${error.message || "Memory save failed."}`);
   }
 
   if (!data) {
     console.error("[Voyage Wall] Supabase insert returned no row.", {
       table: MEMORY_TABLE,
-      payload: memoryPayload
+      payload: allowedInsertPayload
     });
-    throw new Error("Memory save succeeded but no inserted row was returned.");
+    throw new Error("Insert failed: Supabase returned no inserted row.");
   }
 
   console.log("insert result", data);
