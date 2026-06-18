@@ -8,6 +8,9 @@
       name="description"
       content="Share wedding photos and messages on Ella and Zyrus' Voyage Wall."
     >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
     <link rel="stylesheet" href="./src/css/styles.css">
   </head>
   <body>
@@ -47,12 +50,12 @@
           </a>
         </div>
 
-        <a class="scroll-cue" href="#wall">Scroll to view shared moments</a>
+        <a class="scroll-cue" href="#wall" data-smooth-scroll>Scroll to view shared moments</a>
       </header>
 
       <main>
         <section class="section wall-section" id="wall" aria-labelledby="wall-title">
-          <div class="wall-section__header">
+          <div class="wall-section__header section-reveal" data-scroll-reveal>
             <div>
               <p class="eyebrow eyebrow--dark">Love Wall</p>
               <h2 id="wall-title">Shared Moments</h2>
@@ -69,7 +72,7 @@
           </div>
         </section>
 
-        <section class="thank-you-section" aria-labelledby="thank-you-title" data-scroll-reveal>
+        <section class="thank-you-section section-reveal" aria-labelledby="thank-you-title" data-scroll-reveal>
           <div class="thank-you-section__divider" aria-hidden="true"></div>
           <div class="thank-you-card">
             <div class="thank-you-card__watermark" aria-hidden="true"></div>
@@ -96,7 +99,7 @@
           </div>
         </section>
 
-        <footer class="site-footer" aria-label="Voyage Wall footer">
+        <footer class="site-footer section-reveal" aria-label="Voyage Wall footer" data-scroll-reveal>
           <section class="event-footer" aria-label="Event footer">
             <p class="event-footer__brand">VOYAGE WALL</p>
             <p class="event-footer__couple">
@@ -121,13 +124,10 @@
       </main>
 
       <a class="floating-share" href="#share" aria-label="Share a memory" data-open-share>+</a>
-      <button class="memory-toast is-hidden" type="button" id="memory-toast" aria-live="polite">
-        <span>New moment added</span>
-        <strong>View</strong>
-      </button>
     </div>
 
-    <dialog class="share-dialog" id="share-dialog" aria-labelledby="share-title">
+    <dialog class="share-dialog" id="share-dialog" aria-labelledby="share-title" aria-describedby="share-helper">
+      <div class="share-dialog__handle" aria-hidden="true"></div>
       <button class="dialog-close" type="button" id="share-dialog-close" aria-label="Close share form">
         &times;
       </button>
@@ -135,10 +135,10 @@
       <div class="share-dialog__body" id="share">
         <div class="section__header modal-header">
           <p class="eyebrow eyebrow--dark">Guest Memory</p>
-          <h2 id="share-title">Share a memory for Ella &amp; Zyrus</h2>
-          <p>
-            Add one photo, write a short message, and your moment will join the
-            wall for everyone celebrating with us.
+          <h2 id="share-title">Add to Our Journey</h2>
+          <p id="share-helper">
+            Share one photo and a short note for Ella &amp; Zyrus. Your moment
+            will join the wall for everyone celebrating with us.
           </p>
         </div>
 
@@ -188,13 +188,26 @@
               >
             </label>
 
+            <label class="anonymous-toggle" for="anonymous-input">
+              <span>
+                <strong>Share anonymously</strong>
+                <em>Show this as from &ldquo;A guest&rdquo;</em>
+              </span>
+              <input id="anonymous-input" name="anonymous" type="checkbox">
+              <span class="anonymous-toggle__track" aria-hidden="true">
+                <span class="anonymous-toggle__thumb"></span>
+              </span>
+            </label>
+
             <p class="privacy-note">
               Memories may be visible to anyone with this event link.
             </p>
 
-            <button class="button button--primary button--wide" type="submit" id="submit-memory">
-              Share to the Love Wall
-            </button>
+            <div class="sheet-submit">
+              <button class="button button--primary button--wide" type="submit" id="submit-memory">
+                Share to the Love Wall
+              </button>
+            </div>
           </div>
         </form>
 

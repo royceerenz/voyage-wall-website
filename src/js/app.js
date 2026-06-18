@@ -9,6 +9,7 @@ const previewName = document.querySelector("#preview-name");
 const replacePhoto = document.querySelector("#replace-photo");
 const messageInput = document.querySelector("#message-input");
 const nameInput = document.querySelector("#name-input");
+const anonymousInput = document.querySelector("#anonymous-input");
 const messageCount = document.querySelector("#message-count");
 const photoError = document.querySelector("#photo-error");
 const messageError = document.querySelector("#message-error");
@@ -17,7 +18,6 @@ const successPanel = document.querySelector("#success-panel");
 const shareAnother = document.querySelector("#share-another");
 const memoryGrid = document.querySelector("#memory-grid");
 const loadMore = document.querySelector("#load-more");
-const memoryToast = document.querySelector("#memory-toast");
 const dialog = document.querySelector("#memory-dialog");
 const dialogImage = document.querySelector("#dialog-image");
 const dialogMessage = document.querySelector("#dialog-message");
@@ -29,34 +29,29 @@ const shareDialogClose = document.querySelector("#share-dialog-close");
 const openShareButtons = document.querySelectorAll("[data-open-share]");
 const viewWallAfterSubmit = document.querySelector("#view-wall-after-submit");
 const revealSections = document.querySelectorAll("[data-scroll-reveal]");
+const smoothScrollLinks = document.querySelectorAll("[data-smooth-scroll]");
 const heroVideo = document.querySelector(".hero__video");
+const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 const SUPABASE_URL = "https://xitflvwtobrqmvdkeyjz.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XbTe1Nsvr_iIaEfhEI_B1g_g8wCmd5m";
 const MEMORY_TABLE = "memories";
 const PHOTO_BUCKET = "memory-photos";
+const FALLBACK_MEMORY_IMAGE = "./assets/mockups/voyage-wall-hero.png";
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
-
-console.info("[Voyage Wall] Supabase client initialized.", {
-  url: SUPABASE_URL,
-  table: MEMORY_TABLE,
-  bucket: PHOTO_BUCKET
-});
 
 let selectedPhoto = null;
 let selectedPhotoFile = null;
 let selectedPhotoName = "";
 let visibleCount = 6;
 let submissionsOpen = true;
-let pendingRealtimeMemory = null;
 let highlightedMemoryId = null;
 const revealedMemoryIds = new Set();
 let memoryRevealObserver = null;
 
 if (heroVideo) {
-  const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
   const syncHeroVideoMotion = () => {
-    if (motionQuery.matches) {
+    if (reduceMotionQuery.matches) {
       heroVideo.pause();
     } else {
       heroVideo.play().catch(() => {});
@@ -64,7 +59,7 @@ if (heroVideo) {
   };
 
   syncHeroVideoMotion();
-  motionQuery.addEventListener?.("change", syncHeroVideoMotion);
+  reduceMotionQuery.addEventListener?.("change", syncHeroVideoMotion);
 }
 
 function closeModalWithAnimation(modal) {
@@ -73,6 +68,7 @@ function closeModalWithAnimation(modal) {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (reduceMotion) {
     modal.close();
+    syncBodyDialogState();
     return;
   }
 
@@ -80,6 +76,7 @@ function closeModalWithAnimation(modal) {
   window.setTimeout(() => {
     modal.classList.remove("is-closing");
     modal.close();
+    syncBodyDialogState();
   }, 350);
 }
 
@@ -90,7 +87,7 @@ function mapSupabaseMemory(row) {
 
   return {
     id: String(row.id),
-    image: row.photo_url,
+    image: row.photo_url || FALLBACK_MEMORY_IMAGE,
     photo_url: row.photo_url,
     message: row.message || "",
     name: displayName,
@@ -116,20 +113,14 @@ function createUniquePhotoPath(file) {
   return `public/${uniqueId}.${extension}`;
 }
 
+function isSupportedPhotoFile(file) {
+  const allowedExtensions = ["heic", "heif", "jpeg", "jpg", "png", "webp"];
+  const extension = getFileExtension(file);
+  return file.type.startsWith("image/") || allowedExtensions.includes(extension);
+}
+
 async function uploadPhoto(file) {
   const filePath = createUniquePhotoPath(file);
-  console.log("selected file info", {
-    name: file.name,
-    type: file.type,
-    size: file.size,
-    uploadPath: filePath
-  });
-  console.info("[Voyage Wall] Uploading memory photo.", {
-    bucket: PHOTO_BUCKET,
-    path: filePath,
-    type: file.type,
-    size: file.size
-  });
 
   const { data, error } = await supabase.storage
     .from(PHOTO_BUCKET)
@@ -140,8 +131,6 @@ async function uploadPhoto(file) {
     });
 
   if (error) {
-    console.log("storage error", error);
-    console.error("[Voyage Wall] Complete Supabase storage error object.", error);
     console.error("[Voyage Wall] Supabase photo upload failed.", {
       bucket: PHOTO_BUCKET,
       path: filePath,
@@ -150,15 +139,7 @@ async function uploadPhoto(file) {
     throw new Error(`Storage upload failed: ${error.message || "Photo upload failed."}`);
   }
 
-  console.log("upload result", data);
   const photoUrl = publicStorageUrl(data.path);
-  console.log("public URL", photoUrl);
-  console.info("[Voyage Wall] Supabase photo upload succeeded.", {
-    bucket: PHOTO_BUCKET,
-    path: data.path,
-    photoUrl
-  });
-
   return photoUrl;
 }
 
@@ -170,13 +151,6 @@ async function insertMemory(memoryPayload) {
     anonymous: memoryPayload.anonymous
   };
 
-  console.log("insert payload", allowedInsertPayload);
-  console.log("insert payload keys", Object.keys(allowedInsertPayload));
-  console.info("[Voyage Wall] Inserting memory row.", {
-    table: MEMORY_TABLE,
-    payload: allowedInsertPayload
-  });
-
   const { data, error } = await supabase
     .from(MEMORY_TABLE)
     .insert(allowedInsertPayload)
@@ -184,8 +158,6 @@ async function insertMemory(memoryPayload) {
     .single();
 
   if (error) {
-    console.log("insert error", error);
-    console.error("[Voyage Wall] Complete Supabase insert error object.", error);
     console.error("[Voyage Wall] Supabase memory insert failed.", {
       table: MEMORY_TABLE,
       payload: allowedInsertPayload,
@@ -201,12 +173,6 @@ async function insertMemory(memoryPayload) {
     });
     throw new Error("Insert failed: Supabase returned no inserted row.");
   }
-
-  console.log("insert result", data);
-  console.info("[Voyage Wall] Supabase memory insert succeeded.", {
-    table: MEMORY_TABLE,
-    row: data
-  });
 
   return mapSupabaseMemory(data);
 }
@@ -227,11 +193,6 @@ async function loadMemories() {
       });
       throw new Error(error.message || "Could not load memories.");
     }
-
-    console.info("[Voyage Wall] Supabase memories loaded.", {
-      table: MEMORY_TABLE,
-      count: data?.length || 0
-    });
 
     memories = (data || []).map(mapSupabaseMemory);
     visibleCount = 6;
@@ -254,10 +215,11 @@ function renderMemories() {
     return;
   }
 
-  memories.slice(0, visibleCount).forEach((memory) => {
+  memories.slice(0, visibleCount).forEach((memory, index) => {
     const card = document.createElement("article");
     card.className = `memory-card${memory.id === highlightedMemoryId ? " is-new" : ""}`;
     card.dataset.memoryId = memory.id;
+    card.style.setProperty("--card-reveal-delay", `${Math.min(index * 70, 280)}ms`);
     if (revealedMemoryIds.has(memory.id)) {
       card.classList.add("is-visible");
     }
@@ -265,12 +227,15 @@ function renderMemories() {
     card.setAttribute("role", "button");
     card.setAttribute("aria-label", `Open memory from ${memory.name}`);
     card.innerHTML = `
-      <img src="${memory.image}" alt="Wedding memory shared by ${escapeHtml(memory.name)}">
+      <img src="${memory.image}" alt="Wedding memory shared by ${escapeHtml(memory.name)}" loading="lazy" decoding="async">
       <div class="memory-card__body">
         <p>${escapeHtml(memory.message)}</p>
         <span class="memory-card__name">${escapeHtml(memory.name)}</span>
       </div>
     `;
+    card.querySelector("img").addEventListener("error", (event) => {
+      event.currentTarget.src = FALLBACK_MEMORY_IMAGE;
+    }, { once: true });
     card.addEventListener("click", () => openMemory(memory));
     card.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
@@ -291,14 +256,46 @@ function renderMemories() {
       document.querySelectorAll(".memory-card.is-new").forEach((card) => {
         card.classList.remove("is-new");
       });
-    }, 1500);
+    }, 2000);
   }
+}
+
+function addMemoryToWall(memory) {
+  if (memories.some((existingMemory) => existingMemory.id === memory.id)) return;
+
+  memories.unshift(memory);
+  highlightedMemoryId = memory.id;
+  revealedMemoryIds.delete(memory.id);
+  visibleCount = Math.max(visibleCount, 6);
+  renderMemories();
+}
+
+function subscribeToRealtimeMemories() {
+  supabase
+    .channel("voyage-wall-memories")
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: MEMORY_TABLE
+      },
+      (payload) => {
+        addMemoryToWall(mapSupabaseMemory(payload.new));
+      }
+    )
+    .subscribe((status, error) => {
+      if (error) {
+        console.error("[Voyage Wall] Supabase realtime subscription error.", error);
+        return;
+      }
+    });
 }
 
 function observeMemoryCards() {
   const cards = memoryGrid.querySelectorAll(".memory-card:not(.is-visible)");
 
-  if (!("IntersectionObserver" in window)) {
+  if (reduceMotionQuery.matches || !("IntersectionObserver" in window)) {
     cards.forEach((card) => {
       card.classList.add("is-visible");
       revealedMemoryIds.add(card.dataset.memoryId);
@@ -332,6 +329,7 @@ function openMemory(memory) {
   dialogName.textContent = `Shared by ${memory.name}`;
   dialog.classList.remove("is-closing");
   dialog.showModal();
+  syncBodyDialogState();
 }
 
 function escapeHtml(value) {
@@ -347,6 +345,16 @@ function setError(target, message) {
   target.textContent = message;
 }
 
+function scrollToWall() {
+  document.querySelector("#wall").scrollIntoView({
+    behavior: reduceMotionQuery.matches ? "auto" : "smooth"
+  });
+}
+
+function syncBodyDialogState() {
+  document.body.classList.toggle("is-dialog-open", shareDialog.open || dialog.open);
+}
+
 function openShareDialog(event) {
   event?.preventDefault();
   if (!shareDialog.open) {
@@ -354,6 +362,7 @@ function openShareDialog(event) {
     successPanel.classList.add("is-hidden");
     form.classList.remove("is-hidden");
     shareDialog.showModal();
+    syncBodyDialogState();
   }
 }
 
@@ -375,6 +384,7 @@ function resetFormState() {
   messageCount.textContent = "0";
   setError(photoError, "");
   setError(messageError, "");
+  submitMemory.removeAttribute("aria-busy");
 }
 
 photoInput.addEventListener("change", () => {
@@ -382,7 +392,7 @@ photoInput.addEventListener("change", () => {
   setError(photoError, "");
 
   if (!file) return;
-  if (!file.type.startsWith("image/")) {
+  if (!isSupportedPhotoFile(file)) {
     setError(photoError, "Please choose a photo file.");
     return;
   }
@@ -412,8 +422,6 @@ messageInput.addEventListener("input", () => {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  console.log("Submitting memory...");
-  console.info("[Voyage Wall] Memory form submitted.");
 
   if (!submissionsOpen) {
     setError(photoError, "Sharing is currently closed for this event.");
@@ -441,10 +449,11 @@ form.addEventListener("submit", async (event) => {
   if (!isValid) return;
 
   submitMemory.disabled = true;
+  submitMemory.setAttribute("aria-busy", "true");
   submitMemory.textContent = "Adding this to the wall...";
 
   try {
-    const anonymous = !nameInput.value.trim();
+    const anonymous = anonymousInput.checked || !nameInput.value.trim();
     const photoUrl = await uploadPhoto(selectedPhotoFile);
     const memory = await insertMemory({
       photo_url: photoUrl,
@@ -453,24 +462,16 @@ form.addEventListener("submit", async (event) => {
       anonymous
     });
 
-    console.info("[Voyage Wall] Memory submit flow completed.", {
-      id: memory.id,
-      photo_url: memory.photo_url
-    });
-
-    memories.unshift(memory);
-    highlightedMemoryId = memory.id;
-    revealedMemoryIds.delete(memory.id);
-    visibleCount = Math.max(visibleCount, 6);
-    renderMemories();
+    addMemoryToWall(memory);
     resetFormState();
     closeShareDialog();
-    document.querySelector("#wall").scrollIntoView({ behavior: "smooth" });
+    scrollToWall();
   } catch (error) {
-    setError(photoError, `This memory could not be shared yet. ${error.message || "Please try again."}`);
+    setError(photoError, "This memory could not be shared yet. Please try again.");
     console.error("[Voyage Wall] Memory submit flow failed.", error);
   } finally {
     submitMemory.disabled = false;
+    submitMemory.removeAttribute("aria-busy");
     submitMemory.textContent = "Share to the Love Wall";
   }
 });
@@ -484,6 +485,22 @@ openShareButtons.forEach((button) => {
   button.addEventListener("click", openShareDialog);
 });
 
+smoothScrollLinks.forEach((link) => {
+  link.addEventListener("click", (event) => {
+    const targetId = link.getAttribute("href");
+    if (!targetId?.startsWith("#")) return;
+
+    const target = document.querySelector(targetId);
+    if (!target) return;
+
+    event.preventDefault();
+    target.scrollIntoView({
+      behavior: reduceMotionQuery.matches ? "auto" : "smooth",
+      block: "start"
+    });
+  });
+});
+
 shareDialogClose.addEventListener("click", closeShareDialog);
 
 shareDialog.addEventListener("click", (event) => {
@@ -492,9 +509,16 @@ shareDialog.addEventListener("click", (event) => {
   }
 });
 
+shareDialog.addEventListener("close", syncBodyDialogState);
+
+shareDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeShareDialog();
+});
+
 viewWallAfterSubmit.addEventListener("click", () => {
   closeShareDialog();
-  document.querySelector("#wall").scrollIntoView({ behavior: "smooth" });
+  scrollToWall();
 });
 
 loadMore.addEventListener("click", () => {
@@ -504,18 +528,6 @@ loadMore.addEventListener("click", () => {
     renderMemories();
     loadMore.textContent = "Load more moments";
   }, 450);
-});
-
-memoryToast.addEventListener("click", () => {
-  if (pendingRealtimeMemory) {
-    memories.unshift(pendingRealtimeMemory);
-    highlightedMemoryId = pendingRealtimeMemory.id;
-    pendingRealtimeMemory = null;
-    memoryToast.classList.remove("is-visible");
-    window.setTimeout(() => memoryToast.classList.add("is-hidden"), 260);
-    renderMemories();
-    document.querySelector("#wall").scrollIntoView({ behavior: "smooth" });
-  }
 });
 
 dialogClose.addEventListener("click", () => {
@@ -528,12 +540,21 @@ dialog.addEventListener("click", (event) => {
   }
 });
 
+dialog.addEventListener("close", syncBodyDialogState);
+
+dialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeModalWithAnimation(dialog);
+});
+
 window.addEventListener("scroll", () => {
   const showFloatingShare = window.scrollY > window.innerHeight * 0.78;
   floatingShare.classList.toggle("is-visible", showFloatingShare);
 }, { passive: true });
 
-if ("IntersectionObserver" in window) {
+if (reduceMotionQuery.matches) {
+  revealSections.forEach((section) => section.classList.add("is-visible"));
+} else if ("IntersectionObserver" in window) {
   const revealObserver = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
       if (entry.isIntersecting) {
@@ -549,3 +570,4 @@ if ("IntersectionObserver" in window) {
 }
 
 loadMemories();
+subscribeToRealtimeMemories();
