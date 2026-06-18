@@ -1,3 +1,5 @@
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
 const form = document.querySelector("#memory-form");
 const photoInput = document.querySelector("#photo-input");
 const uploadCard = document.querySelector("#upload-card");
@@ -33,6 +35,13 @@ const SUPABASE_URL = "https://xitflvwtobrqmvdkeyjz.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XbTe1Nsvr_iIaEfhEI_B1g_g8wCmd5m";
 const MEMORY_TABLE = "memories";
 const PHOTO_BUCKET = "memory-photos";
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+console.info("[Voyage Wall] Supabase client initialized.", {
+  url: SUPABASE_URL,
+  table: MEMORY_TABLE,
+  bucket: PHOTO_BUCKET
+});
 
 let selectedPhoto = null;
 let selectedPhotoFile = null;
@@ -76,14 +85,6 @@ function closeModalWithAnimation(modal) {
 
 let memories = [];
 
-function supabaseHeaders(extraHeaders = {}) {
-  return {
-    apikey: SUPABASE_PUBLISHABLE_KEY,
-    Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
-    ...extraHeaders
-  };
-}
-
 function mapSupabaseMemory(row) {
   const displayName = row.anonymous ? "A guest" : row.name || "A guest";
 
@@ -99,8 +100,8 @@ function mapSupabaseMemory(row) {
 }
 
 function publicStorageUrl(path) {
-  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-  return `${SUPABASE_URL}/storage/v1/object/public/${PHOTO_BUCKET}/${encodedPath}`;
+  const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
 }
 
 function getFileExtension(file) {
@@ -117,58 +118,110 @@ function createUniquePhotoPath(file) {
 
 async function uploadPhoto(file) {
   const filePath = createUniquePhotoPath(file);
-  const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
-  const uploadResponse = await fetch(`${SUPABASE_URL}/storage/v1/object/${PHOTO_BUCKET}/${encodedPath}`, {
-    method: "POST",
-    headers: supabaseHeaders({
-      "Content-Type": file.type || "application/octet-stream",
-      "x-upsert": "false"
-    }),
-    body: file
+  console.log("selected file info", {
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    uploadPath: filePath
+  });
+  console.info("[Voyage Wall] Uploading memory photo.", {
+    bucket: PHOTO_BUCKET,
+    path: filePath,
+    type: file.type,
+    size: file.size
   });
 
-  if (!uploadResponse.ok) {
-    const details = await uploadResponse.text();
-    throw new Error(details || "Photo upload failed.");
+  const { data, error } = await supabase.storage
+    .from(PHOTO_BUCKET)
+    .upload(filePath, file, {
+      cacheControl: "3600",
+      contentType: file.type || "application/octet-stream",
+      upsert: false
+    });
+
+  if (error) {
+    console.error("[Voyage Wall] Supabase photo upload failed.", {
+      bucket: PHOTO_BUCKET,
+      path: filePath,
+      error
+    });
+    throw new Error(error.message || "Photo upload failed.");
   }
 
-  return publicStorageUrl(filePath);
+  console.log("upload result", data);
+  const photoUrl = publicStorageUrl(data.path);
+  console.log("public URL", photoUrl);
+  console.info("[Voyage Wall] Supabase photo upload succeeded.", {
+    bucket: PHOTO_BUCKET,
+    path: data.path,
+    photoUrl
+  });
+
+  return photoUrl;
 }
 
 async function insertMemory(memoryPayload) {
-  const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/${MEMORY_TABLE}`, {
-    method: "POST",
-    headers: supabaseHeaders({
-      "Content-Type": "application/json",
-      Prefer: "return=representation"
-    }),
-    body: JSON.stringify(memoryPayload)
+  console.info("[Voyage Wall] Inserting memory row.", {
+    table: MEMORY_TABLE,
+    payload: memoryPayload
   });
 
-  if (!insertResponse.ok) {
-    const details = await insertResponse.text();
-    throw new Error(details || "Memory save failed.");
+  const { data, error } = await supabase
+    .from(MEMORY_TABLE)
+    .insert(memoryPayload)
+    .select("id, photo_url, message, name, anonymous, created_at")
+    .single();
+
+  if (error) {
+    console.log("insert error", error);
+    console.error("[Voyage Wall] Supabase memory insert failed.", {
+      table: MEMORY_TABLE,
+      payload: memoryPayload,
+      error
+    });
+    throw new Error(error.message || "Memory save failed.");
   }
 
-  const insertedRows = await insertResponse.json();
-  return mapSupabaseMemory(insertedRows[0]);
+  if (!data) {
+    console.error("[Voyage Wall] Supabase insert returned no row.", {
+      table: MEMORY_TABLE,
+      payload: memoryPayload
+    });
+    throw new Error("Memory save succeeded but no inserted row was returned.");
+  }
+
+  console.log("insert result", data);
+  console.info("[Voyage Wall] Supabase memory insert succeeded.", {
+    table: MEMORY_TABLE,
+    row: data
+  });
+
+  return mapSupabaseMemory(data);
 }
 
 async function loadMemories() {
   memoryGrid.innerHTML = '<p class="wall-status">Loading shared memories...</p>';
 
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/${MEMORY_TABLE}?select=*&order=created_at.desc`, {
-      headers: supabaseHeaders()
-    });
+    const { data, error } = await supabase
+      .from(MEMORY_TABLE)
+      .select("id, photo_url, message, name, anonymous, created_at")
+      .order("created_at", { ascending: false });
 
-    if (!response.ok) {
-      const details = await response.text();
-      throw new Error(details || "Could not load memories.");
+    if (error) {
+      console.error("[Voyage Wall] Supabase memory load failed.", {
+        table: MEMORY_TABLE,
+        error
+      });
+      throw new Error(error.message || "Could not load memories.");
     }
 
-    const rows = await response.json();
-    memories = rows.map(mapSupabaseMemory);
+    console.info("[Voyage Wall] Supabase memories loaded.", {
+      table: MEMORY_TABLE,
+      count: data?.length || 0
+    });
+
+    memories = (data || []).map(mapSupabaseMemory);
     visibleCount = 6;
     renderMemories();
   } catch (error) {
@@ -347,6 +400,8 @@ messageInput.addEventListener("input", () => {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  console.log("Submitting memory...");
+  console.info("[Voyage Wall] Memory form submitted.");
 
   if (!submissionsOpen) {
     setError(photoError, "Sharing is currently closed for this event.");
@@ -386,6 +441,11 @@ form.addEventListener("submit", async (event) => {
       anonymous
     });
 
+    console.info("[Voyage Wall] Memory submit flow completed.", {
+      id: memory.id,
+      photo_url: memory.photo_url
+    });
+
     memories.unshift(memory);
     highlightedMemoryId = memory.id;
     revealedMemoryIds.delete(memory.id);
@@ -395,8 +455,8 @@ form.addEventListener("submit", async (event) => {
     closeShareDialog();
     document.querySelector("#wall").scrollIntoView({ behavior: "smooth" });
   } catch (error) {
-    setError(photoError, "This memory could not be shared yet. Please try again.");
-    console.error(error);
+    setError(photoError, `This memory could not be shared yet. ${error.message || "Please try again."}`);
+    console.error("[Voyage Wall] Memory submit flow failed.", error);
   } finally {
     submitMemory.disabled = false;
     submitMemory.textContent = "Share to the Love Wall";
