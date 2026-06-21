@@ -19,7 +19,9 @@ const successPanel = document.querySelector("#success-panel");
 const shareAnother = document.querySelector("#share-another");
 const memoryGallery = document.querySelector("#memory-gallery");
 const memoryGrid = document.querySelector("#memory-grid");
-const loadMore = document.querySelector("#load-more");
+const carouselControls = document.querySelector("#carousel-controls");
+const memoryPrev = document.querySelector("#memory-prev");
+const memoryNext = document.querySelector("#memory-next");
 const floatingShare = document.querySelector(".floating-share");
 const sourceDialog = document.querySelector("#source-dialog");
 const sourceDialogClose = document.querySelector("#source-dialog-close");
@@ -47,7 +49,6 @@ messageInput.maxLength = MESSAGE_LIMIT;
 let selectedPhoto = null;
 let selectedPhotoFile = null;
 let selectedPhotoName = "";
-let visibleCount = 6;
 let submissionsOpen = true;
 let highlightedMemoryId = null;
 const revealedMemoryIds = new Set();
@@ -210,7 +211,6 @@ async function loadMemories() {
     }
 
     memories = (data || []).map(mapSupabaseMemory);
-    visibleCount = 6;
     renderMemories();
   } catch (error) {
     memoryGrid.innerHTML = `
@@ -226,10 +226,12 @@ function renderMemories() {
   memoryGrid.innerHTML = "";
   if (memories.length === 0) {
     memoryGrid.innerHTML = '<p class="wall-status">No memories have been shared yet.</p>';
-    loadMore.classList.add("is-hidden");
+    carouselControls.classList.add("is-hidden");
     stopGalleryAutoplay();
     return;
   }
+
+  carouselControls.classList.toggle("is-hidden", memories.length <= 2);
 
   const firstRow = document.createElement("div");
   const secondRow = document.createElement("div");
@@ -239,15 +241,15 @@ function renderMemories() {
   secondRow.dataset.direction = "-1";
   memoryGrid.append(firstRow, secondRow);
 
-  const visibleMemories = memories.slice(0, visibleCount);
-  const shouldDuplicateRows = visibleMemories.length > 4;
-  const firstRowMemories = visibleMemories.filter((_, index) => index % 2 === 0);
-  const secondRowMemories = visibleMemories.filter((_, index) => index % 2 === 1);
+  const shouldDuplicateRows = memories.length > 4;
+  const firstRowMemories = memories.filter((_, index) => index % 2 === 0);
+  const secondRowMemories = memories.filter((_, index) => index % 2 === 1);
 
   const appendMemoryCard = (row, memory, index, isClone = false) => {
     const card = document.createElement("article");
     card.className = `memory-card${memory.id === highlightedMemoryId ? " is-new" : ""}`;
     card.dataset.memoryId = memory.id;
+    card.tabIndex = -1;
     if (isClone) {
       card.dataset.clone = "true";
     }
@@ -288,8 +290,6 @@ function renderMemories() {
   observeMemoryCards();
   scheduleGalleryAutoplay(700);
 
-  loadMore.classList.toggle("is-hidden", visibleCount >= memories.length);
-
   if (highlightedMemoryId) {
     window.setTimeout(() => {
       highlightedMemoryId = null;
@@ -306,7 +306,6 @@ function addMemoryToWall(memory) {
   memories.unshift(memory);
   highlightedMemoryId = memory.id;
   revealedMemoryIds.delete(memory.id);
-  visibleCount = Math.max(visibleCount, 6);
   renderMemories();
 }
 
@@ -389,6 +388,38 @@ function scheduleGalleryAutoplay(delay = 2400) {
 function pauseGalleryAutoplay(delay = 2400) {
   stopGalleryAutoplay();
   scheduleGalleryAutoplay(delay);
+}
+
+function moveMemoryRows(direction) {
+  const rows = Array.from(memoryGrid.querySelectorAll(".memory-row"));
+  if (rows.length === 0) return;
+
+  pauseGalleryAutoplay();
+
+  rows.forEach((row) => {
+    const firstCard = row.querySelector(".memory-card");
+    const cardWidth = firstCard?.getBoundingClientRect().width || row.clientWidth * 0.76;
+    const rowStyles = window.getComputedStyle(row);
+    const gap = parseFloat(rowStyles.columnGap || rowStyles.gap) || 0;
+    const step = cardWidth + gap;
+    const loopWidth = getRowLoopWidth(row);
+    const rowDirection = Number(row.dataset.direction || "1");
+    let nextScrollLeft = row.scrollLeft + (step * direction * rowDirection);
+
+    if (loopWidth > row.clientWidth + 24) {
+      if (nextScrollLeft >= loopWidth) {
+        nextScrollLeft -= loopWidth;
+      } else if (nextScrollLeft < 0) {
+        nextScrollLeft += loopWidth;
+      }
+    }
+
+    row.scrollTo({
+      left: nextScrollLeft,
+      behavior: reduceMotionQuery.matches ? "auto" : "smooth"
+    });
+    row.dataset.scrollPosition = String(nextScrollLeft);
+  });
 }
 
 function subscribeToRealtimeMemories() {
@@ -800,15 +831,8 @@ viewWallAfterSubmit.addEventListener("click", () => {
 
 syncAnonymousField();
 
-loadMore.addEventListener("click", () => {
-  pauseGalleryAutoplay();
-  loadMore.textContent = "Loading more moments...";
-  window.setTimeout(() => {
-    visibleCount += 3;
-    renderMemories();
-    loadMore.textContent = "Load more moments";
-  }, 450);
-});
+memoryPrev.addEventListener("click", () => moveMemoryRows(-1));
+memoryNext.addEventListener("click", () => moveMemoryRows(1));
 
 memoryGrid.addEventListener("pointerenter", () => pauseGalleryAutoplay());
 memoryGrid.addEventListener("pointerleave", () => scheduleGalleryAutoplay(900));

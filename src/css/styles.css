@@ -1199,6 +1199,8 @@ h2 {
 
 .load-more {
   display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   justify-content: center;
   margin-top: 14px;
 }
