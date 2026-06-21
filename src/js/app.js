@@ -19,9 +19,6 @@ const successPanel = document.querySelector("#success-panel");
 const shareAnother = document.querySelector("#share-another");
 const memoryGallery = document.querySelector("#memory-gallery");
 const memoryGrid = document.querySelector("#memory-grid");
-const carouselControls = document.querySelector("#carousel-controls");
-const memoryPrev = document.querySelector("#memory-prev");
-const memoryNext = document.querySelector("#memory-next");
 const floatingShare = document.querySelector(".floating-share");
 const sourceDialog = document.querySelector("#source-dialog");
 const sourceDialogClose = document.querySelector("#source-dialog-close");
@@ -226,24 +223,25 @@ function renderMemories() {
   memoryGrid.innerHTML = "";
   if (memories.length === 0) {
     memoryGrid.innerHTML = '<p class="wall-status">No memories have been shared yet.</p>';
-    carouselControls.classList.add("is-hidden");
     stopGalleryAutoplay();
     return;
   }
 
-  carouselControls.classList.toggle("is-hidden", memories.length <= 2);
-
   const firstRow = document.createElement("div");
   const secondRow = document.createElement("div");
+  const thirdRow = document.createElement("div");
   firstRow.className = "memory-row memory-row--primary";
   secondRow.className = "memory-row memory-row--secondary";
+  thirdRow.className = "memory-row memory-row--tertiary";
   firstRow.dataset.direction = "1";
   secondRow.dataset.direction = "-1";
-  memoryGrid.append(firstRow, secondRow);
+  thirdRow.dataset.direction = "1";
+  memoryGrid.append(firstRow, secondRow, thirdRow);
 
   const shouldDuplicateRows = memories.length > 4;
-  const firstRowMemories = memories.filter((_, index) => index % 2 === 0);
-  const secondRowMemories = memories.filter((_, index) => index % 2 === 1);
+  const firstRowMemories = memories.filter((_, index) => index % 3 === 0);
+  const secondRowMemories = memories.filter((_, index) => index % 3 === 1);
+  const thirdRowMemories = memories.filter((_, index) => index % 3 === 2);
 
   const appendMemoryCard = (row, memory, index, isClone = false) => {
     const card = document.createElement("article");
@@ -272,20 +270,24 @@ function renderMemories() {
 
   firstRowMemories.forEach((memory, index) => appendMemoryCard(firstRow, memory, index));
   secondRowMemories.forEach((memory, index) => appendMemoryCard(secondRow, memory, index));
+  thirdRowMemories.forEach((memory, index) => appendMemoryCard(thirdRow, memory, index));
 
   if (shouldDuplicateRows) {
     [1, 2].forEach(() => {
       firstRowMemories.forEach((memory, index) => appendMemoryCard(firstRow, memory, index, true));
       secondRowMemories.forEach((memory, index) => appendMemoryCard(secondRow, memory, index, true));
+      thirdRowMemories.forEach((memory, index) => appendMemoryCard(thirdRow, memory, index, true));
     });
   }
 
   requestAnimationFrame(() => {
     firstRow.scrollLeft = 0;
     const secondLoopWidth = getRowLoopWidth(secondRow);
+    thirdRow.scrollLeft = 0;
     secondRow.scrollLeft = shouldDuplicateRows ? secondLoopWidth : 0;
     firstRow.dataset.scrollPosition = String(firstRow.scrollLeft);
     secondRow.dataset.scrollPosition = String(secondRow.scrollLeft);
+    thirdRow.dataset.scrollPosition = String(thirdRow.scrollLeft);
   });
   observeMemoryCards();
   scheduleGalleryAutoplay(700);
@@ -388,38 +390,6 @@ function scheduleGalleryAutoplay(delay = 2400) {
 function pauseGalleryAutoplay(delay = 2400) {
   stopGalleryAutoplay();
   scheduleGalleryAutoplay(delay);
-}
-
-function moveMemoryRows(direction) {
-  const rows = Array.from(memoryGrid.querySelectorAll(".memory-row"));
-  if (rows.length === 0) return;
-
-  pauseGalleryAutoplay();
-
-  rows.forEach((row) => {
-    const firstCard = row.querySelector(".memory-card");
-    const cardWidth = firstCard?.getBoundingClientRect().width || row.clientWidth * 0.76;
-    const rowStyles = window.getComputedStyle(row);
-    const gap = parseFloat(rowStyles.columnGap || rowStyles.gap) || 0;
-    const step = cardWidth + gap;
-    const loopWidth = getRowLoopWidth(row);
-    const rowDirection = Number(row.dataset.direction || "1");
-    let nextScrollLeft = row.scrollLeft + (step * direction * rowDirection);
-
-    if (loopWidth > row.clientWidth + 24) {
-      if (nextScrollLeft >= loopWidth) {
-        nextScrollLeft -= loopWidth;
-      } else if (nextScrollLeft < 0) {
-        nextScrollLeft += loopWidth;
-      }
-    }
-
-    row.scrollTo({
-      left: nextScrollLeft,
-      behavior: reduceMotionQuery.matches ? "auto" : "smooth"
-    });
-    row.dataset.scrollPosition = String(nextScrollLeft);
-  });
 }
 
 function subscribeToRealtimeMemories() {
@@ -830,9 +800,6 @@ viewWallAfterSubmit.addEventListener("click", () => {
 });
 
 syncAnonymousField();
-
-memoryPrev.addEventListener("click", () => moveMemoryRows(-1));
-memoryNext.addEventListener("click", () => moveMemoryRows(1));
 
 memoryGrid.addEventListener("pointerenter", () => pauseGalleryAutoplay());
 memoryGrid.addEventListener("pointerleave", () => scheduleGalleryAutoplay(900));

@@ -1197,14 +1197,6 @@ h2 {
   }
 }
 
-.load-more {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  justify-content: center;
-  margin-top: 14px;
-}
-
 .thank-you-section {
   width: min(960px, calc(100% - 32px));
   margin: 0 auto;
