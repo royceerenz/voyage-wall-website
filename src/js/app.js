@@ -27,6 +27,13 @@ const dialogClose = document.querySelector("#dialog-close");
 const floatingShare = document.querySelector(".floating-share");
 const shareDialog = document.querySelector("#share-dialog");
 const shareDialogClose = document.querySelector("#share-dialog-close");
+const cameraDialog = document.querySelector("#camera-dialog");
+const cameraVideo = document.querySelector("#camera-video");
+const cameraStatus = document.querySelector("#camera-status");
+const cameraCapture = document.querySelector("#camera-capture");
+const cameraGallery = document.querySelector("#camera-gallery");
+const cameraClose = document.querySelector("#camera-close");
+const cameraCancel = document.querySelector("#camera-cancel");
 const openShareButtons = document.querySelectorAll("[data-open-share]");
 const viewWallAfterSubmit = document.querySelector("#view-wall-after-submit");
 const revealSections = document.querySelectorAll("[data-scroll-reveal]");
@@ -51,6 +58,7 @@ let highlightedMemoryId = null;
 const revealedMemoryIds = new Set();
 let memoryRevealObserver = null;
 let cameraFirstSharePending = false;
+let cameraStream = null;
 
 if (heroVideo) {
   const syncHeroVideoMotion = () => {
@@ -370,7 +378,7 @@ function scrollToMemory(memoryId) {
 }
 
 function syncBodyDialogState() {
-  document.body.classList.toggle("is-dialog-open", shareDialog.open || dialog.open);
+  document.body.classList.toggle("is-dialog-open", shareDialog.open || dialog.open || cameraDialog.open);
 }
 
 function showShareForm() {
@@ -393,13 +401,109 @@ function openShareDialog(event) {
 function openCameraFirstShare(event) {
   event?.preventDefault();
 
-  cameraFirstSharePending = true;
-  photoInput.setAttribute("capture", "environment");
-  photoInput.click();
+  openCameraScreen();
 }
 
 function closeShareDialog() {
   closeModalWithAnimation(shareDialog);
+}
+
+function openGalleryPicker() {
+  cameraFirstSharePending = true;
+  photoInput.removeAttribute("capture");
+  photoInput.value = "";
+  photoInput.click();
+}
+
+function stopCameraStream() {
+  if (!cameraStream) return;
+
+  cameraStream.getTracks().forEach((track) => track.stop());
+  cameraStream = null;
+  cameraVideo.srcObject = null;
+}
+
+function closeCameraScreen() {
+  stopCameraStream();
+  cameraStatus.textContent = "Opening camera...";
+  cameraCapture.disabled = false;
+
+  if (cameraDialog.open) {
+    cameraDialog.close();
+    syncBodyDialogState();
+  }
+}
+
+async function openCameraScreen() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    openGalleryPicker();
+    return;
+  }
+
+  if (!cameraDialog.open) {
+    cameraDialog.showModal();
+    syncBodyDialogState();
+  }
+
+  cameraStatus.textContent = "Opening camera...";
+  cameraCapture.disabled = true;
+
+  try {
+    stopCameraStream();
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" }
+      },
+      audio: false
+    });
+
+    cameraVideo.srcObject = cameraStream;
+    await cameraVideo.play();
+    cameraStatus.textContent = "";
+    cameraCapture.disabled = false;
+  } catch (error) {
+    console.warn("[Voyage Wall] Camera unavailable, opening gallery picker.", error);
+    closeCameraScreen();
+    openGalleryPicker();
+  }
+}
+
+function blobToFile(blob) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return new File([blob], `voyage-wall-memory-${timestamp}.jpg`, {
+    type: "image/jpeg",
+    lastModified: Date.now()
+  });
+}
+
+function captureCameraFrame() {
+  if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) return;
+
+  cameraCapture.disabled = true;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = cameraVideo.videoWidth;
+  canvas.height = cameraVideo.videoHeight;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    cameraCapture.disabled = false;
+    cameraStatus.textContent = "We could not capture that photo. Please try again.";
+    return;
+  }
+
+  context.drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
+
+  canvas.toBlob((blob) => {
+    if (!blob) {
+      cameraCapture.disabled = false;
+      cameraStatus.textContent = "We could not capture that photo. Please try again.";
+      return;
+    }
+
+    closeCameraScreen();
+    cameraFirstSharePending = true;
+    handlePhotoFile(blobToFile(blob));
+  }, "image/jpeg", 0.92);
 }
 
 function resetFormState() {
@@ -600,6 +704,26 @@ shareDialog.addEventListener("cancel", (event) => {
 viewWallAfterSubmit.addEventListener("click", () => {
   closeShareDialog();
   scrollToWall();
+});
+
+cameraCapture.addEventListener("click", captureCameraFrame);
+
+cameraGallery.addEventListener("click", () => {
+  closeCameraScreen();
+  openGalleryPicker();
+});
+
+cameraClose.addEventListener("click", closeCameraScreen);
+cameraCancel.addEventListener("click", closeCameraScreen);
+
+cameraDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeCameraScreen();
+});
+
+cameraDialog.addEventListener("close", () => {
+  stopCameraStream();
+  syncBodyDialogState();
 });
 
 syncAnonymousField();

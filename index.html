@@ -225,6 +225,36 @@
       </div>
     </dialog>
 
+    <dialog class="camera-dialog" id="camera-dialog" aria-labelledby="camera-title">
+      <div class="camera-screen">
+        <div class="camera-screen__topbar">
+          <h2 id="camera-title">Share a Moment</h2>
+          <button class="dialog-close camera-screen__close" type="button" id="camera-close" aria-label="Close camera">
+            &times;
+          </button>
+        </div>
+
+        <div class="camera-preview">
+          <video id="camera-video" autoplay muted playsinline></video>
+          <p class="camera-preview__status" id="camera-status" role="status">
+            Opening camera...
+          </p>
+        </div>
+
+        <div class="camera-screen__actions" aria-label="Camera actions">
+          <button class="button button--secondary" type="button" id="camera-gallery">
+            Gallery
+          </button>
+          <button class="camera-capture" type="button" id="camera-capture" aria-label="Capture photo">
+            <span aria-hidden="true"></span>
+          </button>
+          <button class="button button--primary" type="button" id="camera-cancel">
+            Close
+          </button>
+        </div>
+      </div>
+    </dialog>
+
     <dialog class="memory-dialog" id="memory-dialog">
       <button class="dialog-close" type="button" id="dialog-close" aria-label="Close memory">
         &times;
