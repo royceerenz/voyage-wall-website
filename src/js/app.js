@@ -17,12 +17,14 @@ const messageError = document.querySelector("#message-error");
 const submitMemory = document.querySelector("#submit-memory");
 const successPanel = document.querySelector("#success-panel");
 const shareAnother = document.querySelector("#share-another");
+const memoryGallery = document.querySelector("#memory-gallery");
 const memoryGrid = document.querySelector("#memory-grid");
 const loadMore = document.querySelector("#load-more");
 const dialog = document.querySelector("#memory-dialog");
 const dialogImage = document.querySelector("#dialog-image");
 const dialogMessage = document.querySelector("#dialog-message");
 const dialogName = document.querySelector("#dialog-name");
+const dialogPosition = document.querySelector("#dialog-position");
 const dialogClose = document.querySelector("#dialog-close");
 const floatingShare = document.querySelector(".floating-share");
 const sourceDialog = document.querySelector("#source-dialog");
@@ -54,6 +56,16 @@ let highlightedMemoryId = null;
 const revealedMemoryIds = new Set();
 let memoryRevealObserver = null;
 let sourceSelectionPending = false;
+let activeMemoryIndex = -1;
+let lastFocusedElement = null;
+let storyTouchStartX = 0;
+let galleryAutoplayFrame = null;
+let galleryResumeTimer = null;
+let galleryPointerStartX = 0;
+let galleryPointerScrollLeft = 0;
+let activeGalleryRow = null;
+let isGalleryDragging = false;
+let didGalleryDrag = false;
 
 if (heroVideo) {
   const syncHeroVideoMotion = () => {
@@ -218,8 +230,17 @@ function renderMemories() {
   if (memories.length === 0) {
     memoryGrid.innerHTML = '<p class="wall-status">No memories have been shared yet.</p>';
     loadMore.classList.add("is-hidden");
+    stopGalleryAutoplay();
     return;
   }
+
+  const firstRow = document.createElement("div");
+  const secondRow = document.createElement("div");
+  firstRow.className = "memory-row memory-row--primary";
+  secondRow.className = "memory-row memory-row--secondary";
+  firstRow.dataset.direction = "-1";
+  secondRow.dataset.direction = "1";
+  memoryGrid.append(firstRow, secondRow);
 
   memories.slice(0, visibleCount).forEach((memory, index) => {
     const card = document.createElement("article");
@@ -242,17 +263,26 @@ function renderMemories() {
     card.querySelector("img").addEventListener("error", (event) => {
       event.currentTarget.src = FALLBACK_MEMORY_IMAGE;
     }, { once: true });
-    card.addEventListener("click", () => openMemory(memory));
+    card.addEventListener("click", () => {
+      if (didGalleryDrag) return;
+      openMemory(memory);
+    });
     card.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         openMemory(memory);
       }
     });
-    memoryGrid.append(card);
+    const targetRow = index % 2 === 0 ? firstRow : secondRow;
+    targetRow.append(card);
   });
 
+  requestAnimationFrame(() => {
+    firstRow.scrollLeft = firstRow.scrollWidth - firstRow.clientWidth;
+    secondRow.scrollLeft = 0;
+  });
   observeMemoryCards();
+  scheduleGalleryAutoplay();
 
   loadMore.classList.toggle("is-hidden", visibleCount >= memories.length);
 
@@ -274,6 +304,65 @@ function addMemoryToWall(memory) {
   revealedMemoryIds.delete(memory.id);
   visibleCount = Math.max(visibleCount, 6);
   renderMemories();
+}
+
+function canAutoplayGallery() {
+  return !reduceMotionQuery.matches && memoryGrid.querySelectorAll(".memory-card").length > 4;
+}
+
+function stopGalleryAutoplay() {
+  if (galleryAutoplayFrame) {
+    cancelAnimationFrame(galleryAutoplayFrame);
+    galleryAutoplayFrame = null;
+  }
+
+  if (galleryResumeTimer) {
+    window.clearTimeout(galleryResumeTimer);
+    galleryResumeTimer = null;
+  }
+}
+
+function runGalleryAutoplay() {
+  if (!canAutoplayGallery() || isGalleryDragging || dialog.open) {
+    galleryAutoplayFrame = null;
+    return;
+  }
+
+  const rows = Array.from(memoryGrid.querySelectorAll(".memory-row"));
+  if (!rows.some((row) => row.scrollWidth - row.clientWidth > 24)) {
+    galleryAutoplayFrame = null;
+    return;
+  }
+
+  rows.forEach((row) => {
+    const maxScroll = row.scrollWidth - row.clientWidth;
+    if (maxScroll <= 24) return;
+
+    let direction = Number(row.dataset.direction || "1");
+    row.scrollLeft += 0.22 * direction;
+
+    if (row.scrollLeft >= maxScroll - 1) {
+      row.dataset.direction = "-1";
+    } else if (row.scrollLeft <= 1) {
+      row.dataset.direction = "1";
+    }
+  });
+
+  galleryAutoplayFrame = requestAnimationFrame(runGalleryAutoplay);
+}
+
+function scheduleGalleryAutoplay(delay = 2400) {
+  stopGalleryAutoplay();
+  if (!canAutoplayGallery()) return;
+
+  galleryResumeTimer = window.setTimeout(() => {
+    galleryAutoplayFrame = requestAnimationFrame(runGalleryAutoplay);
+  }, delay);
+}
+
+function pauseGalleryAutoplay(delay = 2400) {
+  stopGalleryAutoplay();
+  scheduleGalleryAutoplay(delay);
 }
 
 function subscribeToRealtimeMemories() {
@@ -328,14 +417,127 @@ function observeMemoryCards() {
   cards.forEach((card) => memoryRevealObserver.observe(card));
 }
 
-function openMemory(memory) {
+function updateMemoryDialog() {
+  const memory = memories[activeMemoryIndex];
+  if (!memory) return;
+
   dialogImage.src = memory.image;
   dialogImage.alt = `Wedding memory shared by ${memory.name}`;
   dialogMessage.textContent = memory.message;
-  dialogName.textContent = `Shared by ${memory.name}`;
+  dialogName.textContent = memory.anonymous ? "Anonymous" : `Shared by ${memory.name}`;
+  dialogPosition.textContent = `Voyage Log ${activeMemoryIndex + 1} / ${memories.length}`;
+}
+
+function openMemory(memory) {
+  const memoryIndex = memories.findIndex((item) => item.id === memory.id);
+  activeMemoryIndex = memoryIndex >= 0 ? memoryIndex : 0;
+  lastFocusedElement = document.activeElement;
+  pauseGalleryAutoplay();
+  updateMemoryDialog();
   dialog.classList.remove("is-closing");
   dialog.showModal();
   syncBodyDialogState();
+  dialogClose.focus({ preventScroll: true });
+}
+
+function showAdjacentMemory(direction) {
+  if (!dialog.open || memories.length < 2) return;
+
+  activeMemoryIndex = (activeMemoryIndex + direction + memories.length) % memories.length;
+  dialog.classList.remove("is-story-shifting");
+  void dialog.offsetWidth;
+  dialog.classList.add("is-story-shifting");
+  updateMemoryDialog();
+}
+
+function closeMemoryDialog() {
+  closeModalWithAnimation(dialog);
+}
+
+function handleDialogKeydown(event) {
+  if (!dialog.open) return;
+
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    showAdjacentMemory(1);
+    return;
+  }
+
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    showAdjacentMemory(-1);
+    return;
+  }
+
+  if (event.key !== "Tab") return;
+
+  const focusableElements = Array.from(dialog.querySelectorAll(
+    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  )).filter((element) => !element.disabled && element.getClientRects().length > 0);
+
+  if (focusableElements.length === 0) return;
+
+  const firstElement = focusableElements[0];
+  const lastElement = focusableElements[focusableElements.length - 1];
+
+  if (event.shiftKey && document.activeElement === firstElement) {
+    event.preventDefault();
+    lastElement.focus();
+  } else if (!event.shiftKey && document.activeElement === lastElement) {
+    event.preventDefault();
+    firstElement.focus();
+  }
+}
+
+function handleStoryTouchStart(event) {
+  storyTouchStartX = event.changedTouches[0]?.clientX || 0;
+}
+
+function handleStoryTouchEnd(event) {
+  const touchEndX = event.changedTouches[0]?.clientX || 0;
+  const swipeDistance = touchEndX - storyTouchStartX;
+
+  if (Math.abs(swipeDistance) < 48) return;
+  showAdjacentMemory(swipeDistance < 0 ? 1 : -1);
+}
+
+function beginGalleryDrag(event) {
+  if (event.button !== undefined && event.button !== 0) return;
+  const row = event.target.closest(".memory-row");
+  if (!row) return;
+
+  isGalleryDragging = true;
+  didGalleryDrag = false;
+  activeGalleryRow = row;
+  galleryPointerStartX = event.clientX;
+  galleryPointerScrollLeft = activeGalleryRow.scrollLeft;
+  activeGalleryRow.classList.add("is-dragging");
+  activeGalleryRow.setPointerCapture?.(event.pointerId);
+  pauseGalleryAutoplay();
+}
+
+function moveGalleryDrag(event) {
+  if (!isGalleryDragging || !activeGalleryRow) return;
+
+  const deltaX = event.clientX - galleryPointerStartX;
+  if (Math.abs(deltaX) > 5) {
+    didGalleryDrag = true;
+  }
+
+  activeGalleryRow.scrollLeft = galleryPointerScrollLeft - deltaX;
+}
+
+function endGalleryDrag(event) {
+  if (!isGalleryDragging) return;
+
+  isGalleryDragging = false;
+  activeGalleryRow?.classList.remove("is-dragging");
+  activeGalleryRow?.releasePointerCapture?.(event.pointerId);
+  activeGalleryRow = null;
+  window.setTimeout(() => {
+    didGalleryDrag = false;
+  }, 0);
+  scheduleGalleryAutoplay();
 }
 
 function escapeHtml(value) {
@@ -367,7 +569,8 @@ function scrollToMemory(memoryId) {
 
   card.scrollIntoView({
     behavior: reduceMotionQuery.matches ? "auto" : "smooth",
-    block: "center"
+    block: "nearest",
+    inline: "center"
   });
   card.focus({ preventScroll: true });
 }
@@ -642,6 +845,7 @@ viewWallAfterSubmit.addEventListener("click", () => {
 syncAnonymousField();
 
 loadMore.addEventListener("click", () => {
+  pauseGalleryAutoplay();
   loadMore.textContent = "Loading more moments...";
   window.setTimeout(() => {
     visibleCount += 3;
@@ -650,21 +854,41 @@ loadMore.addEventListener("click", () => {
   }, 450);
 });
 
+memoryGrid.addEventListener("pointerenter", () => stopGalleryAutoplay());
+memoryGrid.addEventListener("pointerleave", () => scheduleGalleryAutoplay());
+memoryGrid.addEventListener("pointerdown", beginGalleryDrag);
+memoryGrid.addEventListener("pointermove", moveGalleryDrag);
+memoryGrid.addEventListener("pointerup", endGalleryDrag);
+memoryGrid.addEventListener("pointercancel", endGalleryDrag);
+memoryGrid.addEventListener("wheel", () => pauseGalleryAutoplay(), { passive: true });
+memoryGrid.addEventListener("touchstart", () => pauseGalleryAutoplay(), { passive: true });
+memoryGrid.addEventListener("click", () => pauseGalleryAutoplay());
+
 dialogClose.addEventListener("click", () => {
-  closeModalWithAnimation(dialog);
+  closeMemoryDialog();
 });
 
 dialog.addEventListener("click", (event) => {
   if (event.target === dialog) {
-    closeModalWithAnimation(dialog);
+    closeMemoryDialog();
   }
 });
 
-dialog.addEventListener("close", syncBodyDialogState);
+dialog.addEventListener("keydown", handleDialogKeydown);
+dialog.addEventListener("touchstart", handleStoryTouchStart, { passive: true });
+dialog.addEventListener("touchend", handleStoryTouchEnd, { passive: true });
+
+dialog.addEventListener("close", () => {
+  syncBodyDialogState();
+  scheduleGalleryAutoplay();
+  if (lastFocusedElement instanceof HTMLElement) {
+    lastFocusedElement.focus({ preventScroll: true });
+  }
+});
 
 dialog.addEventListener("cancel", (event) => {
   event.preventDefault();
-  closeModalWithAnimation(dialog);
+  closeMemoryDialog();
 });
 
 window.addEventListener("scroll", () => {
