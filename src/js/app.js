@@ -896,8 +896,8 @@ loadMore.addEventListener("click", () => {
   }, 450);
 });
 
-memoryGrid.addEventListener("pointerenter", () => stopGalleryAutoplay());
-memoryGrid.addEventListener("pointerleave", () => scheduleGalleryAutoplay());
+memoryGrid.addEventListener("pointerenter", () => pauseGalleryAutoplay());
+memoryGrid.addEventListener("pointerleave", () => scheduleGalleryAutoplay(900));
 memoryGrid.addEventListener("pointerdown", beginGalleryDrag);
 memoryGrid.addEventListener("pointermove", moveGalleryDrag);
 memoryGrid.addEventListener("pointerup", endGalleryDrag);
@@ -922,7 +922,7 @@ dialog.addEventListener("touchend", handleStoryTouchEnd, { passive: true });
 
 dialog.addEventListener("close", () => {
   syncBodyDialogState();
-  scheduleGalleryAutoplay();
+  scheduleGalleryAutoplay(900);
   if (lastFocusedElement instanceof HTMLElement) {
     lastFocusedElement.focus({ preventScroll: true });
   }
