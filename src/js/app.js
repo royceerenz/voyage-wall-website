@@ -25,22 +25,18 @@ const dialogMessage = document.querySelector("#dialog-message");
 const dialogName = document.querySelector("#dialog-name");
 const dialogClose = document.querySelector("#dialog-close");
 const floatingShare = document.querySelector(".floating-share");
+const sourceDialog = document.querySelector("#source-dialog");
+const sourceDialogClose = document.querySelector("#source-dialog-close");
+const takePhoto = document.querySelector("#take-photo");
+const uploadGallery = document.querySelector("#upload-gallery");
 const shareDialog = document.querySelector("#share-dialog");
 const shareDialogClose = document.querySelector("#share-dialog-close");
-const cameraDialog = document.querySelector("#camera-dialog");
-const cameraVideo = document.querySelector("#camera-video");
-const cameraStatus = document.querySelector("#camera-status");
-const cameraCapture = document.querySelector("#camera-capture");
-const cameraGallery = document.querySelector("#camera-gallery");
-const cameraClose = document.querySelector("#camera-close");
-const cameraCancel = document.querySelector("#camera-cancel");
 const openShareButtons = document.querySelectorAll("[data-open-share]");
 const viewWallAfterSubmit = document.querySelector("#view-wall-after-submit");
 const revealSections = document.querySelectorAll("[data-scroll-reveal]");
 const smoothScrollLinks = document.querySelectorAll("[data-smooth-scroll]");
 const heroVideo = document.querySelector(".hero__video");
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-const mobileShareQuery = window.matchMedia("(pointer: coarse), (max-width: 760px)");
 
 const SUPABASE_URL = "https://xitflvwtobrqmvdkeyjz.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XbTe1Nsvr_iIaEfhEI_B1g_g8wCmd5m";
@@ -57,8 +53,7 @@ let submissionsOpen = true;
 let highlightedMemoryId = null;
 const revealedMemoryIds = new Set();
 let memoryRevealObserver = null;
-let cameraFirstSharePending = false;
-let cameraStream = null;
+let sourceSelectionPending = false;
 
 if (heroVideo) {
   const syncHeroVideoMotion = () => {
@@ -378,12 +373,26 @@ function scrollToMemory(memoryId) {
 }
 
 function syncBodyDialogState() {
-  document.body.classList.toggle("is-dialog-open", shareDialog.open || dialog.open || cameraDialog.open);
+  document.body.classList.toggle("is-dialog-open", sourceDialog.open || shareDialog.open || dialog.open);
 }
 
 function showShareForm() {
   successPanel.classList.add("is-hidden");
   form.classList.remove("is-hidden");
+}
+
+function openSourceDialog(event) {
+  event?.preventDefault();
+
+  if (!sourceDialog.open) {
+    sourceDialog.classList.remove("is-closing");
+    sourceDialog.showModal();
+    syncBodyDialogState();
+  }
+}
+
+function closeSourceDialog() {
+  closeModalWithAnimation(sourceDialog);
 }
 
 function openShareDialog(event) {
@@ -398,112 +407,26 @@ function openShareDialog(event) {
   }
 }
 
-function openCameraFirstShare(event) {
-  event?.preventDefault();
+function choosePhotoSource(useCamera) {
+  sourceSelectionPending = true;
+  photoInput.value = "";
 
-  openCameraScreen();
+  if (useCamera) {
+    photoInput.setAttribute("capture", "environment");
+  } else {
+    photoInput.removeAttribute("capture");
+  }
+
+  if (sourceDialog.open) {
+    sourceDialog.close();
+    syncBodyDialogState();
+  }
+
+  photoInput.click();
 }
 
 function closeShareDialog() {
   closeModalWithAnimation(shareDialog);
-}
-
-function openGalleryPicker() {
-  cameraFirstSharePending = true;
-  photoInput.removeAttribute("capture");
-  photoInput.value = "";
-  photoInput.click();
-}
-
-function stopCameraStream() {
-  if (!cameraStream) return;
-
-  cameraStream.getTracks().forEach((track) => track.stop());
-  cameraStream = null;
-  cameraVideo.srcObject = null;
-}
-
-function closeCameraScreen() {
-  stopCameraStream();
-  cameraStatus.textContent = "Opening camera...";
-  cameraCapture.disabled = false;
-
-  if (cameraDialog.open) {
-    cameraDialog.close();
-    syncBodyDialogState();
-  }
-}
-
-async function openCameraScreen() {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    openGalleryPicker();
-    return;
-  }
-
-  if (!cameraDialog.open) {
-    cameraDialog.showModal();
-    syncBodyDialogState();
-  }
-
-  cameraStatus.textContent = "Opening camera...";
-  cameraCapture.disabled = true;
-
-  try {
-    stopCameraStream();
-    cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: "environment" }
-      },
-      audio: false
-    });
-
-    cameraVideo.srcObject = cameraStream;
-    await cameraVideo.play();
-    cameraStatus.textContent = "";
-    cameraCapture.disabled = false;
-  } catch (error) {
-    console.warn("[Voyage Wall] Camera unavailable, opening gallery picker.", error);
-    closeCameraScreen();
-    openGalleryPicker();
-  }
-}
-
-function blobToFile(blob) {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return new File([blob], `voyage-wall-memory-${timestamp}.jpg`, {
-    type: "image/jpeg",
-    lastModified: Date.now()
-  });
-}
-
-function captureCameraFrame() {
-  if (!cameraVideo.videoWidth || !cameraVideo.videoHeight) return;
-
-  cameraCapture.disabled = true;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = cameraVideo.videoWidth;
-  canvas.height = cameraVideo.videoHeight;
-  const context = canvas.getContext("2d");
-  if (!context) {
-    cameraCapture.disabled = false;
-    cameraStatus.textContent = "We could not capture that photo. Please try again.";
-    return;
-  }
-
-  context.drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
-
-  canvas.toBlob((blob) => {
-    if (!blob) {
-      cameraCapture.disabled = false;
-      cameraStatus.textContent = "We could not capture that photo. Please try again.";
-      return;
-    }
-
-    closeCameraScreen();
-    cameraFirstSharePending = true;
-    handlePhotoFile(blobToFile(blob));
-  }, "image/jpeg", 0.92);
 }
 
 function resetFormState() {
@@ -529,15 +452,15 @@ function handlePhotoFile(file) {
   photoInput.removeAttribute("capture");
 
   if (!file) {
-    cameraFirstSharePending = false;
+    sourceSelectionPending = false;
     return;
   }
   if (!isSupportedPhotoFile(file)) {
     setError(photoError, "Please choose a photo file.");
-    if (cameraFirstSharePending) {
+    if (sourceSelectionPending) {
       openShareDialog();
     }
-    cameraFirstSharePending = false;
+    sourceSelectionPending = false;
     return;
   }
 
@@ -552,8 +475,8 @@ function handlePhotoFile(file) {
   previewCard.classList.remove("is-hidden");
   uploadCard.classList.add("is-hidden");
 
-  if (cameraFirstSharePending) {
-    cameraFirstSharePending = false;
+  if (sourceSelectionPending) {
+    sourceSelectionPending = false;
     openShareDialog();
   }
 }
@@ -660,14 +583,7 @@ shareAnother.addEventListener("click", () => {
 });
 
 openShareButtons.forEach((button) => {
-  button.addEventListener("click", (event) => {
-    if (mobileShareQuery.matches) {
-      openCameraFirstShare(event);
-      return;
-    }
-
-    openShareDialog(event);
-  });
+  button.addEventListener("click", openSourceDialog);
 });
 
 smoothScrollLinks.forEach((link) => {
@@ -688,6 +604,23 @@ smoothScrollLinks.forEach((link) => {
 
 shareDialogClose.addEventListener("click", closeShareDialog);
 
+takePhoto.addEventListener("click", () => choosePhotoSource(true));
+uploadGallery.addEventListener("click", () => choosePhotoSource(false));
+sourceDialogClose.addEventListener("click", closeSourceDialog);
+
+sourceDialog.addEventListener("click", (event) => {
+  if (event.target === sourceDialog) {
+    closeSourceDialog();
+  }
+});
+
+sourceDialog.addEventListener("close", syncBodyDialogState);
+
+sourceDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeSourceDialog();
+});
+
 shareDialog.addEventListener("click", (event) => {
   if (event.target === shareDialog) {
     closeShareDialog();
@@ -704,26 +637,6 @@ shareDialog.addEventListener("cancel", (event) => {
 viewWallAfterSubmit.addEventListener("click", () => {
   closeShareDialog();
   scrollToWall();
-});
-
-cameraCapture.addEventListener("click", captureCameraFrame);
-
-cameraGallery.addEventListener("click", () => {
-  closeCameraScreen();
-  openGalleryPicker();
-});
-
-cameraClose.addEventListener("click", closeCameraScreen);
-cameraCancel.addEventListener("click", closeCameraScreen);
-
-cameraDialog.addEventListener("cancel", (event) => {
-  event.preventDefault();
-  closeCameraScreen();
-});
-
-cameraDialog.addEventListener("close", () => {
-  stopCameraStream();
-  syncBodyDialogState();
 });
 
 syncAnonymousField();

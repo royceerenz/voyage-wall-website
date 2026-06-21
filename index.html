@@ -126,6 +126,32 @@
       <a class="floating-share" href="#share" aria-label="Share a memory" data-open-share>+</a>
     </div>
 
+    <dialog class="source-dialog" id="source-dialog" aria-labelledby="source-title" aria-describedby="source-helper">
+      <div class="share-dialog__handle" aria-hidden="true"></div>
+      <button class="dialog-close" type="button" id="source-dialog-close" aria-label="Close photo options">
+        &times;
+      </button>
+
+      <div class="source-dialog__body">
+        <div class="section__header modal-header">
+          <p class="eyebrow eyebrow--dark">Guest Memory</p>
+          <h2 id="source-title">Share a Moment</h2>
+          <p id="source-helper">Choose how you would like to add your photo.</p>
+        </div>
+
+        <div class="source-options" aria-label="Photo source options">
+          <button class="source-option" type="button" id="take-photo">
+            <span class="source-option__title">Take Photo</span>
+            <span class="source-option__hint">Open your camera</span>
+          </button>
+          <button class="source-option" type="button" id="upload-gallery">
+            <span class="source-option__title">Upload from Gallery</span>
+            <span class="source-option__hint">Choose an existing photo</span>
+          </button>
+        </div>
+      </div>
+    </dialog>
+
     <dialog class="share-dialog" id="share-dialog" aria-labelledby="share-title" aria-describedby="share-helper">
       <div class="share-dialog__handle" aria-hidden="true"></div>
       <button class="dialog-close" type="button" id="share-dialog-close" aria-label="Close share form">
@@ -222,36 +248,6 @@
             </button>
           </div>
         </section>
-      </div>
-    </dialog>
-
-    <dialog class="camera-dialog" id="camera-dialog" aria-labelledby="camera-title">
-      <div class="camera-screen">
-        <div class="camera-screen__topbar">
-          <h2 id="camera-title">Share a Moment</h2>
-          <button class="dialog-close camera-screen__close" type="button" id="camera-close" aria-label="Close camera">
-            &times;
-          </button>
-        </div>
-
-        <div class="camera-preview">
-          <video id="camera-video" autoplay muted playsinline></video>
-          <p class="camera-preview__status" id="camera-status" role="status">
-            Opening camera...
-          </p>
-        </div>
-
-        <div class="camera-screen__actions" aria-label="Camera actions">
-          <button class="button button--secondary" type="button" id="camera-gallery">
-            Gallery
-          </button>
-          <button class="camera-capture" type="button" id="camera-capture" aria-label="Capture photo">
-            <span aria-hidden="true"></span>
-          </button>
-          <button class="button button--primary" type="button" id="camera-cancel">
-            Close
-          </button>
-        </div>
       </div>
     </dialog>
 
