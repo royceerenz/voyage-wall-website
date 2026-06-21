@@ -66,6 +66,9 @@ let galleryPointerScrollLeft = 0;
 let activeGalleryRow = null;
 let isGalleryDragging = false;
 let didGalleryDrag = false;
+let galleryAutoplayStartedAt = 0;
+const GALLERY_AUTOPLAY_SPEED = 0.45;
+const GALLERY_RESUME_RAMP_MS = 900;
 
 if (heroVideo) {
   const syncHeroVideoMotion = () => {
@@ -364,8 +367,11 @@ function runGalleryAutoplay() {
 
     const direction = Number(row.dataset.direction || "1");
     let scrollPosition = Number(row.dataset.scrollPosition || row.scrollLeft);
+    const elapsed = performance.now() - galleryAutoplayStartedAt;
+    const speedRamp = Math.min(1, Math.max(0.18, elapsed / GALLERY_RESUME_RAMP_MS));
+    const frameSpeed = GALLERY_AUTOPLAY_SPEED * speedRamp;
     row.classList.add("is-autoplaying");
-    scrollPosition += 0.45 * direction;
+    scrollPosition += frameSpeed * direction;
 
     if (direction > 0 && scrollPosition >= loopWidth) {
       scrollPosition -= loopWidth;
@@ -391,6 +397,10 @@ function scheduleGalleryAutoplay(delay = 2400) {
   if (!canAutoplayGallery()) return;
 
   galleryResumeTimer = window.setTimeout(() => {
+    memoryGrid.querySelectorAll(".memory-row").forEach((row) => {
+      row.dataset.scrollPosition = String(row.scrollLeft);
+    });
+    galleryAutoplayStartedAt = performance.now();
     galleryAutoplayFrame = requestAnimationFrame(runGalleryAutoplay);
   }, delay);
 }

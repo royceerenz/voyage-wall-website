@@ -1005,6 +1005,7 @@ h2 {
 
 .wall-section {
   padding-top: 84px;
+  padding-bottom: 34px;
 }
 
 .wall-section__header {
@@ -1031,14 +1032,15 @@ h2 {
 
 .memory-gallery {
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
   width: 100%;
 }
 
 .memory-grid {
   display: grid;
-  gap: 18px;
-  padding-block: 4px 16px;
+  gap: 8px;
+  padding-block: 8px 4px;
   min-width: 0;
 }
 
@@ -1050,9 +1052,9 @@ h2 {
   max-width: 100%;
   min-width: 0;
   overflow-x: hidden;
-  overflow-y: hidden;
+  overflow-y: visible;
   padding-inline: clamp(18px, 5vw, 48px);
-  padding-block: 2px 12px;
+  padding-block: 12px 22px;
   cursor: grab;
   scroll-behavior: smooth;
   scroll-padding-inline: clamp(18px, 5vw, 48px);
@@ -1097,7 +1099,7 @@ h2 {
   display: flex;
   flex: 0 0 clamp(236px, 30vw, 340px);
   flex-direction: column;
-  min-height: 0;
+  min-height: max-content;
   overflow: hidden;
   border: 1px solid rgba(23, 48, 74, 0.1);
   border-radius: var(--radius);
@@ -1196,7 +1198,7 @@ h2 {
 .load-more {
   display: flex;
   justify-content: center;
-  margin-top: 28px;
+  margin-top: 14px;
 }
 
 .thank-you-section {
@@ -1764,17 +1766,22 @@ h2 {
     flex-direction: column;
   }
 
+  .wall-section {
+    padding-bottom: 24px;
+  }
+
   .memory-gallery {
     width: 100%;
   }
 
   .memory-grid {
-    gap: 14px;
+    gap: 4px;
   }
 
   .memory-row {
     gap: 14px;
     padding-inline: 18px 28px;
+    padding-block: 10px 20px;
     scroll-padding-inline: 18px;
   }
 
