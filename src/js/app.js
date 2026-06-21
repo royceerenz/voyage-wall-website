@@ -417,12 +417,12 @@ function choosePhotoSource(useCamera) {
     photoInput.removeAttribute("capture");
   }
 
+  photoInput.click();
+
   if (sourceDialog.open) {
     sourceDialog.close();
     syncBodyDialogState();
   }
-
-  photoInput.click();
 }
 
 function closeShareDialog() {
