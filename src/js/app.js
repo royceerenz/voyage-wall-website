@@ -238,14 +238,22 @@ function renderMemories() {
   const secondRow = document.createElement("div");
   firstRow.className = "memory-row memory-row--primary";
   secondRow.className = "memory-row memory-row--secondary";
-  firstRow.dataset.direction = "-1";
-  secondRow.dataset.direction = "1";
+  firstRow.dataset.direction = "1";
+  secondRow.dataset.direction = "-1";
   memoryGrid.append(firstRow, secondRow);
 
-  memories.slice(0, visibleCount).forEach((memory, index) => {
+  const visibleMemories = memories.slice(0, visibleCount);
+  const shouldDuplicateRows = visibleMemories.length > 4;
+  const firstRowMemories = visibleMemories.filter((_, index) => index % 2 === 0);
+  const secondRowMemories = visibleMemories.filter((_, index) => index % 2 === 1);
+
+  const appendMemoryCard = (row, memory, index, isClone = false) => {
     const card = document.createElement("article");
     card.className = `memory-card${memory.id === highlightedMemoryId ? " is-new" : ""}`;
     card.dataset.memoryId = memory.id;
+    if (isClone) {
+      card.dataset.clone = "true";
+    }
     card.style.setProperty("--card-reveal-delay", `${Math.min(index * 70, 280)}ms`);
     if (revealedMemoryIds.has(memory.id)) {
       card.classList.add("is-visible");
@@ -273,16 +281,28 @@ function renderMemories() {
         openMemory(memory);
       }
     });
-    const targetRow = index % 2 === 0 ? firstRow : secondRow;
-    targetRow.append(card);
-  });
+    row.append(card);
+  };
+
+  firstRowMemories.forEach((memory, index) => appendMemoryCard(firstRow, memory, index));
+  secondRowMemories.forEach((memory, index) => appendMemoryCard(secondRow, memory, index));
+
+  if (shouldDuplicateRows) {
+    [1, 2].forEach(() => {
+      firstRowMemories.forEach((memory, index) => appendMemoryCard(firstRow, memory, index, true));
+      secondRowMemories.forEach((memory, index) => appendMemoryCard(secondRow, memory, index, true));
+    });
+  }
 
   requestAnimationFrame(() => {
-    firstRow.scrollLeft = firstRow.scrollWidth - firstRow.clientWidth;
-    secondRow.scrollLeft = 0;
+    firstRow.scrollLeft = 0;
+    const secondLoopWidth = getRowLoopWidth(secondRow);
+    secondRow.scrollLeft = shouldDuplicateRows ? secondLoopWidth : 0;
+    firstRow.dataset.scrollPosition = String(firstRow.scrollLeft);
+    secondRow.dataset.scrollPosition = String(secondRow.scrollLeft);
   });
   observeMemoryCards();
-  scheduleGalleryAutoplay();
+  scheduleGalleryAutoplay(700);
 
   loadMore.classList.toggle("is-hidden", visibleCount >= memories.length);
 
@@ -307,7 +327,7 @@ function addMemoryToWall(memory) {
 }
 
 function canAutoplayGallery() {
-  return !reduceMotionQuery.matches && memoryGrid.querySelectorAll(".memory-card").length > 4;
+  return !reduceMotionQuery.matches && memoryGrid.querySelectorAll('.memory-card:not([data-clone="true"])').length > 4;
 }
 
 function stopGalleryAutoplay() {
@@ -320,6 +340,10 @@ function stopGalleryAutoplay() {
     window.clearTimeout(galleryResumeTimer);
     galleryResumeTimer = null;
   }
+
+  memoryGrid.querySelectorAll(".memory-row.is-autoplaying").forEach((row) => {
+    row.classList.remove("is-autoplaying");
+  });
 }
 
 function runGalleryAutoplay() {
@@ -335,20 +359,31 @@ function runGalleryAutoplay() {
   }
 
   rows.forEach((row) => {
-    const maxScroll = row.scrollWidth - row.clientWidth;
-    if (maxScroll <= 24) return;
+    const loopWidth = getRowLoopWidth(row);
+    if (loopWidth <= row.clientWidth + 24) return;
 
-    let direction = Number(row.dataset.direction || "1");
-    row.scrollLeft += 0.22 * direction;
+    const direction = Number(row.dataset.direction || "1");
+    let scrollPosition = Number(row.dataset.scrollPosition || row.scrollLeft);
+    row.classList.add("is-autoplaying");
+    scrollPosition += 0.45 * direction;
 
-    if (row.scrollLeft >= maxScroll - 1) {
-      row.dataset.direction = "-1";
-    } else if (row.scrollLeft <= 1) {
-      row.dataset.direction = "1";
+    if (direction > 0 && scrollPosition >= loopWidth) {
+      scrollPosition -= loopWidth;
+    } else if (direction < 0 && scrollPosition <= 0) {
+      scrollPosition += loopWidth;
     }
+
+    row.dataset.scrollPosition = String(scrollPosition);
+    row.scrollLeft = scrollPosition;
   });
 
   galleryAutoplayFrame = requestAnimationFrame(runGalleryAutoplay);
+}
+
+function getRowLoopWidth(row) {
+  const firstClone = row.querySelector('[data-clone="true"]');
+  if (!firstClone || !row.firstElementChild) return 0;
+  return firstClone.offsetLeft - row.firstElementChild.offsetLeft;
 }
 
 function scheduleGalleryAutoplay(delay = 2400) {
@@ -502,6 +537,11 @@ function handleStoryTouchEnd(event) {
 }
 
 function beginGalleryDrag(event) {
+  if (event.pointerType === "touch") {
+    pauseGalleryAutoplay();
+    return;
+  }
+
   if (event.button !== undefined && event.button !== 0) return;
   const row = event.target.closest(".memory-row");
   if (!row) return;
@@ -511,6 +551,7 @@ function beginGalleryDrag(event) {
   activeGalleryRow = row;
   galleryPointerStartX = event.clientX;
   galleryPointerScrollLeft = activeGalleryRow.scrollLeft;
+  activeGalleryRow.dataset.scrollPosition = String(activeGalleryRow.scrollLeft);
   activeGalleryRow.classList.add("is-dragging");
   activeGalleryRow.setPointerCapture?.(event.pointerId);
   pauseGalleryAutoplay();
@@ -525,6 +566,7 @@ function moveGalleryDrag(event) {
   }
 
   activeGalleryRow.scrollLeft = galleryPointerScrollLeft - deltaX;
+  activeGalleryRow.dataset.scrollPosition = String(activeGalleryRow.scrollLeft);
 }
 
 function endGalleryDrag(event) {

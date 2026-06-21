@@ -1031,44 +1031,25 @@ h2 {
 
 .memory-gallery {
   position: relative;
-  isolation: isolate;
   overflow: hidden;
   width: 100%;
-}
-
-.memory-gallery::before,
-.memory-gallery::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  z-index: 3;
-  display: block;
-  width: clamp(18px, 4vw, 42px);
-  pointer-events: none;
-}
-
-.memory-gallery::before {
-  left: 0;
-  background: linear-gradient(90deg, rgba(15, 34, 56, 0.18), rgba(15, 34, 56, 0.08) 46%, rgba(15, 34, 56, 0));
-}
-
-.memory-gallery::after {
-  right: 0;
-  background: linear-gradient(90deg, rgba(15, 34, 56, 0), rgba(15, 34, 56, 0.08) 54%, rgba(15, 34, 56, 0.18));
 }
 
 .memory-grid {
   display: grid;
   gap: 18px;
   padding-block: 4px 16px;
+  min-width: 0;
 }
 
 .memory-row {
   display: flex;
   align-items: stretch;
   gap: 18px;
-  overflow-x: auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
   overflow-y: hidden;
   padding-inline: clamp(18px, 5vw, 48px);
   padding-block: 2px 12px;
@@ -1077,7 +1058,8 @@ h2 {
   scroll-padding-inline: clamp(18px, 5vw, 48px);
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
-  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  touch-action: manipulation;
 }
 
 .memory-row::-webkit-scrollbar {
@@ -1088,6 +1070,11 @@ h2 {
   cursor: grabbing;
   scroll-behavior: auto;
   user-select: none;
+}
+
+.memory-row.is-autoplaying {
+  scroll-behavior: auto;
+  scroll-snap-type: none;
 }
 
 .wall-status {
@@ -1779,11 +1766,6 @@ h2 {
 
   .memory-gallery {
     width: 100%;
-  }
-
-  .memory-gallery::before,
-  .memory-gallery::after {
-    width: 22px;
   }
 
   .memory-grid {
