@@ -9,6 +9,7 @@ const previewName = document.querySelector("#preview-name");
 const replacePhoto = document.querySelector("#replace-photo");
 const messageInput = document.querySelector("#message-input");
 const nameInput = document.querySelector("#name-input");
+const nameField = document.querySelector("#name-field");
 const anonymousInput = document.querySelector("#anonymous-input");
 const messageCount = document.querySelector("#message-count");
 const photoError = document.querySelector("#photo-error");
@@ -32,6 +33,7 @@ const revealSections = document.querySelectorAll("[data-scroll-reveal]");
 const smoothScrollLinks = document.querySelectorAll("[data-smooth-scroll]");
 const heroVideo = document.querySelector(".hero__video");
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+const mobileShareQuery = window.matchMedia("(pointer: coarse), (max-width: 760px)");
 
 const SUPABASE_URL = "https://xitflvwtobrqmvdkeyjz.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XbTe1Nsvr_iIaEfhEI_B1g_g8wCmd5m";
@@ -48,6 +50,7 @@ let submissionsOpen = true;
 let highlightedMemoryId = null;
 const revealedMemoryIds = new Set();
 let memoryRevealObserver = null;
+let cameraFirstSharePending = false;
 
 if (heroVideo) {
   const syncHeroVideoMotion = () => {
@@ -351,19 +354,48 @@ function scrollToWall() {
   });
 }
 
+function scrollToMemory(memoryId) {
+  const card = Array.from(memoryGrid.querySelectorAll(".memory-card"))
+    .find((memoryCard) => memoryCard.dataset.memoryId === memoryId);
+  if (!card) {
+    scrollToWall();
+    return;
+  }
+
+  card.scrollIntoView({
+    behavior: reduceMotionQuery.matches ? "auto" : "smooth",
+    block: "center"
+  });
+  card.focus({ preventScroll: true });
+}
+
 function syncBodyDialogState() {
   document.body.classList.toggle("is-dialog-open", shareDialog.open || dialog.open);
 }
 
+function showShareForm() {
+  successPanel.classList.add("is-hidden");
+  form.classList.remove("is-hidden");
+}
+
 function openShareDialog(event) {
   event?.preventDefault();
+  photoInput.removeAttribute("capture");
+
   if (!shareDialog.open) {
     shareDialog.classList.remove("is-closing");
-    successPanel.classList.add("is-hidden");
-    form.classList.remove("is-hidden");
+    showShareForm();
     shareDialog.showModal();
     syncBodyDialogState();
   }
+}
+
+function openCameraFirstShare(event) {
+  event?.preventDefault();
+
+  cameraFirstSharePending = true;
+  photoInput.setAttribute("capture", "environment");
+  photoInput.click();
 }
 
 function closeShareDialog() {
@@ -385,15 +417,23 @@ function resetFormState() {
   setError(photoError, "");
   setError(messageError, "");
   submitMemory.removeAttribute("aria-busy");
+  syncAnonymousField();
 }
 
-photoInput.addEventListener("change", () => {
-  const file = photoInput.files?.[0];
+function handlePhotoFile(file) {
   setError(photoError, "");
+  photoInput.removeAttribute("capture");
 
-  if (!file) return;
+  if (!file) {
+    cameraFirstSharePending = false;
+    return;
+  }
   if (!isSupportedPhotoFile(file)) {
     setError(photoError, "Please choose a photo file.");
+    if (cameraFirstSharePending) {
+      openShareDialog();
+    }
+    cameraFirstSharePending = false;
     return;
   }
 
@@ -407,10 +447,30 @@ photoInput.addEventListener("change", () => {
   previewName.textContent = selectedPhotoName;
   previewCard.classList.remove("is-hidden");
   uploadCard.classList.add("is-hidden");
+
+  if (cameraFirstSharePending) {
+    cameraFirstSharePending = false;
+    openShareDialog();
+  }
+}
+
+photoInput.addEventListener("change", () => {
+  handlePhotoFile(photoInput.files?.[0]);
 });
 
 replacePhoto.addEventListener("click", () => {
   photoInput.click();
+});
+
+["dragenter", "dragover"].forEach((eventName) => {
+  uploadCard.addEventListener(eventName, (event) => {
+    event.preventDefault();
+  });
+});
+
+uploadCard.addEventListener("drop", (event) => {
+  event.preventDefault();
+  handlePhotoFile(event.dataTransfer?.files?.[0]);
 });
 
 messageInput.addEventListener("input", () => {
@@ -419,6 +479,17 @@ messageInput.addEventListener("input", () => {
     setError(messageError, "");
   }
 });
+
+function syncAnonymousField() {
+  const isAnonymous = anonymousInput.checked;
+  nameField.classList.toggle("is-hidden", isAnonymous);
+  nameInput.disabled = isAnonymous;
+  if (isAnonymous) {
+    nameInput.value = "";
+  }
+}
+
+anonymousInput.addEventListener("change", syncAnonymousField);
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -464,8 +535,12 @@ form.addEventListener("submit", async (event) => {
 
     addMemoryToWall(memory);
     resetFormState();
-    closeShareDialog();
-    scrollToWall();
+    form.classList.add("is-hidden");
+    successPanel.classList.remove("is-hidden");
+    window.setTimeout(() => {
+      closeShareDialog();
+      scrollToMemory(memory.id);
+    }, reduceMotionQuery.matches ? 0 : 900);
   } catch (error) {
     setError(photoError, "This memory could not be shared yet. Please try again.");
     console.error("[Voyage Wall] Memory submit flow failed.", error);
@@ -477,12 +552,18 @@ form.addEventListener("submit", async (event) => {
 });
 
 shareAnother.addEventListener("click", () => {
-  successPanel.classList.add("is-hidden");
-  form.classList.remove("is-hidden");
+  showShareForm();
 });
 
 openShareButtons.forEach((button) => {
-  button.addEventListener("click", openShareDialog);
+  button.addEventListener("click", (event) => {
+    if (mobileShareQuery.matches) {
+      openCameraFirstShare(event);
+      return;
+    }
+
+    openShareDialog(event);
+  });
 });
 
 smoothScrollLinks.forEach((link) => {
@@ -520,6 +601,8 @@ viewWallAfterSubmit.addEventListener("click", () => {
   closeShareDialog();
   scrollToWall();
 });
+
+syncAnonymousField();
 
 loadMore.addEventListener("click", () => {
   loadMore.textContent = "Loading more moments...";
