@@ -20,12 +20,6 @@ const shareAnother = document.querySelector("#share-another");
 const memoryGallery = document.querySelector("#memory-gallery");
 const memoryGrid = document.querySelector("#memory-grid");
 const loadMore = document.querySelector("#load-more");
-const dialog = document.querySelector("#memory-dialog");
-const dialogImage = document.querySelector("#dialog-image");
-const dialogMessage = document.querySelector("#dialog-message");
-const dialogName = document.querySelector("#dialog-name");
-const dialogPosition = document.querySelector("#dialog-position");
-const dialogClose = document.querySelector("#dialog-close");
 const floatingShare = document.querySelector(".floating-share");
 const sourceDialog = document.querySelector("#source-dialog");
 const sourceDialogClose = document.querySelector("#source-dialog-close");
@@ -45,7 +39,10 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XbTe1Nsvr_iIaEfhEI_B1g_g8wCmd5m
 const MEMORY_TABLE = "memories";
 const PHOTO_BUCKET = "memory-photos";
 const FALLBACK_MEMORY_IMAGE = "./assets/mockups/voyage-wall-hero.png";
+const MESSAGE_LIMIT = 120;
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+messageInput.maxLength = MESSAGE_LIMIT;
 
 let selectedPhoto = null;
 let selectedPhotoFile = null;
@@ -56,9 +53,6 @@ let highlightedMemoryId = null;
 const revealedMemoryIds = new Set();
 let memoryRevealObserver = null;
 let sourceSelectionPending = false;
-let activeMemoryIndex = -1;
-let lastFocusedElement = null;
-let storyTouchStartX = 0;
 let galleryAutoplayFrame = null;
 let galleryResumeTimer = null;
 let galleryPointerStartX = 0;
@@ -261,9 +255,6 @@ function renderMemories() {
     if (revealedMemoryIds.has(memory.id)) {
       card.classList.add("is-visible");
     }
-    card.tabIndex = 0;
-    card.setAttribute("role", "button");
-    card.setAttribute("aria-label", `Open memory from ${memory.name}`);
     card.innerHTML = `
       <img src="${memory.image}" alt="Wedding memory shared by ${escapeHtml(memory.name)}" loading="lazy" decoding="async">
       <div class="memory-card__body">
@@ -274,16 +265,6 @@ function renderMemories() {
     card.querySelector("img").addEventListener("error", (event) => {
       event.currentTarget.src = FALLBACK_MEMORY_IMAGE;
     }, { once: true });
-    card.addEventListener("click", () => {
-      if (didGalleryDrag) return;
-      openMemory(memory);
-    });
-    card.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        openMemory(memory);
-      }
-    });
     row.append(card);
   };
 
@@ -350,7 +331,7 @@ function stopGalleryAutoplay() {
 }
 
 function runGalleryAutoplay() {
-  if (!canAutoplayGallery() || isGalleryDragging || dialog.open) {
+  if (!canAutoplayGallery() || isGalleryDragging) {
     galleryAutoplayFrame = null;
     return;
   }
@@ -462,90 +443,6 @@ function observeMemoryCards() {
   cards.forEach((card) => memoryRevealObserver.observe(card));
 }
 
-function updateMemoryDialog() {
-  const memory = memories[activeMemoryIndex];
-  if (!memory) return;
-
-  dialogImage.src = memory.image;
-  dialogImage.alt = `Wedding memory shared by ${memory.name}`;
-  dialogMessage.textContent = memory.message;
-  dialogName.textContent = memory.anonymous ? "Anonymous" : `Shared by ${memory.name}`;
-  dialogPosition.textContent = `Voyage Log ${activeMemoryIndex + 1} / ${memories.length}`;
-}
-
-function openMemory(memory) {
-  const memoryIndex = memories.findIndex((item) => item.id === memory.id);
-  activeMemoryIndex = memoryIndex >= 0 ? memoryIndex : 0;
-  lastFocusedElement = document.activeElement;
-  pauseGalleryAutoplay();
-  updateMemoryDialog();
-  dialog.classList.remove("is-closing");
-  dialog.showModal();
-  syncBodyDialogState();
-  dialogClose.focus({ preventScroll: true });
-}
-
-function showAdjacentMemory(direction) {
-  if (!dialog.open || memories.length < 2) return;
-
-  activeMemoryIndex = (activeMemoryIndex + direction + memories.length) % memories.length;
-  dialog.classList.remove("is-story-shifting");
-  void dialog.offsetWidth;
-  dialog.classList.add("is-story-shifting");
-  updateMemoryDialog();
-}
-
-function closeMemoryDialog() {
-  closeModalWithAnimation(dialog);
-}
-
-function handleDialogKeydown(event) {
-  if (!dialog.open) return;
-
-  if (event.key === "ArrowRight") {
-    event.preventDefault();
-    showAdjacentMemory(1);
-    return;
-  }
-
-  if (event.key === "ArrowLeft") {
-    event.preventDefault();
-    showAdjacentMemory(-1);
-    return;
-  }
-
-  if (event.key !== "Tab") return;
-
-  const focusableElements = Array.from(dialog.querySelectorAll(
-    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-  )).filter((element) => !element.disabled && element.getClientRects().length > 0);
-
-  if (focusableElements.length === 0) return;
-
-  const firstElement = focusableElements[0];
-  const lastElement = focusableElements[focusableElements.length - 1];
-
-  if (event.shiftKey && document.activeElement === firstElement) {
-    event.preventDefault();
-    lastElement.focus();
-  } else if (!event.shiftKey && document.activeElement === lastElement) {
-    event.preventDefault();
-    firstElement.focus();
-  }
-}
-
-function handleStoryTouchStart(event) {
-  storyTouchStartX = event.changedTouches[0]?.clientX || 0;
-}
-
-function handleStoryTouchEnd(event) {
-  const touchEndX = event.changedTouches[0]?.clientX || 0;
-  const swipeDistance = touchEndX - storyTouchStartX;
-
-  if (Math.abs(swipeDistance) < 48) return;
-  showAdjacentMemory(swipeDistance < 0 ? 1 : -1);
-}
-
 function beginGalleryDrag(event) {
   if (event.pointerType === "touch") {
     pauseGalleryAutoplay();
@@ -628,7 +525,7 @@ function scrollToMemory(memoryId) {
 }
 
 function syncBodyDialogState() {
-  document.body.classList.toggle("is-dialog-open", sourceDialog.open || shareDialog.open || dialog.open);
+  document.body.classList.toggle("is-dialog-open", sourceDialog.open || shareDialog.open);
 }
 
 function showShareForm() {
@@ -756,6 +653,10 @@ uploadCard.addEventListener("drop", (event) => {
 });
 
 messageInput.addEventListener("input", () => {
+  if (messageInput.value.length > MESSAGE_LIMIT) {
+    messageInput.value = messageInput.value.slice(0, MESSAGE_LIMIT);
+  }
+
   messageCount.textContent = String(messageInput.value.length);
   if (messageInput.value.trim()) {
     setError(messageError, "");
@@ -794,6 +695,9 @@ form.addEventListener("submit", async (event) => {
 
   if (!message) {
     setError(messageError, "Please write a short message for the couple.");
+    isValid = false;
+  } else if (message.length > MESSAGE_LIMIT) {
+    setError(messageError, `Please keep your message to ${MESSAGE_LIMIT} characters.`);
     isValid = false;
   } else {
     setError(messageError, "");
@@ -915,33 +819,6 @@ memoryGrid.addEventListener("pointercancel", endGalleryDrag);
 memoryGrid.addEventListener("wheel", () => pauseGalleryAutoplay(), { passive: true });
 memoryGrid.addEventListener("touchstart", () => pauseGalleryAutoplay(), { passive: true });
 memoryGrid.addEventListener("click", () => pauseGalleryAutoplay());
-
-dialogClose.addEventListener("click", () => {
-  closeMemoryDialog();
-});
-
-dialog.addEventListener("click", (event) => {
-  if (event.target === dialog) {
-    closeMemoryDialog();
-  }
-});
-
-dialog.addEventListener("keydown", handleDialogKeydown);
-dialog.addEventListener("touchstart", handleStoryTouchStart, { passive: true });
-dialog.addEventListener("touchend", handleStoryTouchEnd, { passive: true });
-
-dialog.addEventListener("close", () => {
-  syncBodyDialogState();
-  scheduleGalleryAutoplay(900);
-  if (lastFocusedElement instanceof HTMLElement) {
-    lastFocusedElement.focus({ preventScroll: true });
-  }
-});
-
-dialog.addEventListener("cancel", (event) => {
-  event.preventDefault();
-  closeMemoryDialog();
-});
 
 window.addEventListener("scroll", () => {
   const showFloatingShare = window.scrollY > window.innerHeight * 0.78;

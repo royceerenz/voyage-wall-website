@@ -195,14 +195,14 @@
               <textarea
                 id="message-input"
                 name="message"
-                maxlength="280"
+                maxlength="120"
                 rows="5"
                 placeholder="Write a sweet note, favorite moment, or wish for their voyage ahead."
               ></textarea>
             </label>
             <div class="field-row">
               <p class="field-error" id="message-error" role="alert"></p>
-              <p class="char-count"><span id="message-count">0</span>/280</p>
+              <p class="char-count"><span id="message-count">0</span>/120</p>
             </div>
 
             <label class="field" id="name-field">
@@ -250,18 +250,6 @@
             </button>
           </div>
         </section>
-      </div>
-    </dialog>
-
-    <dialog class="memory-dialog" id="memory-dialog">
-      <button class="dialog-close" type="button" id="dialog-close" aria-label="Close memory">
-        &times;
-      </button>
-      <img id="dialog-image" alt="">
-      <div class="memory-dialog__body">
-        <p class="memory-dialog__position" id="dialog-position"></p>
-        <p id="dialog-message"></p>
-        <p id="dialog-name"></p>
       </div>
     </dialog>
 

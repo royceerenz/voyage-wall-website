@@ -1105,7 +1105,7 @@ h2 {
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.88);
   box-shadow: var(--soft-shadow);
-  cursor: pointer;
+  cursor: default;
   opacity: 0;
   transform: translateY(16px) scale(0.98);
   transition: transform 180ms ease, box-shadow 180ms ease;
@@ -1155,8 +1155,10 @@ h2 {
 
 .memory-card__body p {
   color: var(--ink);
+  font-size: 0.96rem;
   line-height: 1.55;
   overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .memory-card__name {
@@ -1497,32 +1499,8 @@ h2 {
   transform: translateY(0);
 }
 
-.memory-dialog {
-  inset: 0;
-  width: 100%;
-  max-width: none;
-  height: 100%;
-  max-height: none;
-  padding: 0;
-  overflow: hidden;
-  border: 0;
-  border-radius: 0;
-  color: var(--pearl);
-  background:
-    radial-gradient(circle at 50% 18%, rgba(169, 190, 208, 0.16), transparent 36rem),
-    #061729;
-  box-shadow: none;
-  transform-origin: center;
-}
-
-.memory-dialog::backdrop {
-  background: rgba(5, 18, 32, 0.86);
-  backdrop-filter: blur(6px);
-}
-
 .source-dialog,
-.share-dialog,
-.memory-dialog {
+.share-dialog {
   opacity: 0;
   transform: translateY(32px) scale(0.98);
   transition:
@@ -1533,22 +1511,19 @@ h2 {
 }
 
 .source-dialog[open],
-.share-dialog[open],
-.memory-dialog[open] {
+.share-dialog[open] {
   opacity: 1;
   transform: translateY(0) scale(1);
 }
 
 .source-dialog.is-closing,
-.share-dialog.is-closing,
-.memory-dialog.is-closing {
+.share-dialog.is-closing {
   opacity: 0;
   transform: translateY(32px) scale(0.98);
 }
 
 .source-dialog::backdrop,
-.share-dialog::backdrop,
-.memory-dialog::backdrop {
+.share-dialog::backdrop {
   opacity: 0;
   transition:
     opacity 350ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -1557,102 +1532,25 @@ h2 {
 }
 
 .source-dialog[open]::backdrop,
-.share-dialog[open]::backdrop,
-.memory-dialog[open]::backdrop {
+.share-dialog[open]::backdrop {
   opacity: 1;
 }
 
 .source-dialog.is-closing::backdrop,
-.share-dialog.is-closing::backdrop,
-.memory-dialog.is-closing::backdrop {
+.share-dialog.is-closing::backdrop {
   opacity: 0;
 }
 
 @starting-style {
   .source-dialog[open],
-  .share-dialog[open],
-  .memory-dialog[open] {
+  .share-dialog[open] {
     opacity: 0;
     transform: translateY(32px) scale(0.98);
   }
 
   .source-dialog[open]::backdrop,
-  .share-dialog[open]::backdrop,
-  .memory-dialog[open]::backdrop {
+  .share-dialog[open]::backdrop {
     opacity: 0;
-  }
-}
-
-.memory-dialog img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  max-height: none;
-  object-fit: contain;
-  display: block;
-  padding: max(72px, env(safe-area-inset-top)) 14px max(176px, calc(156px + env(safe-area-inset-bottom)));
-  transition: opacity 260ms ease, transform 260ms ease;
-}
-
-.memory-dialog.is-story-shifting img {
-  animation: storyImageShift 280ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.memory-dialog__body {
-  position: absolute;
-  inset: auto 0 0;
-  z-index: 1;
-  padding: 38px 20px calc(22px + env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, rgba(6, 23, 41, 0), rgba(6, 23, 41, 0.78) 28%, rgba(6, 23, 41, 0.96));
-}
-
-.memory-dialog__body p {
-  max-width: 760px;
-  margin-inline: auto;
-  line-height: 1.7;
-  overflow-wrap: anywhere;
-}
-
-.memory-dialog__position {
-  margin-bottom: 8px;
-  color: rgba(255, 252, 245, 0.72);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-#dialog-message {
-  color: var(--pearl);
-  font-family: var(--serif);
-  font-size: clamp(1.1rem, 4.8vw, 1.45rem);
-}
-
-#dialog-name {
-  margin-top: 12px;
-  color: rgba(255, 252, 245, 0.76);
-  font-weight: 700;
-}
-
-.memory-dialog .dialog-close {
-  position: fixed;
-  top: max(16px, env(safe-area-inset-top));
-  right: 16px;
-  color: var(--pearl);
-  background: rgba(6, 23, 41, 0.58);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-@keyframes storyImageShift {
-  from {
-    opacity: 0.64;
-    transform: translateX(18px) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0) scale(1);
   }
 }
 
@@ -1913,10 +1811,8 @@ h2 {
 
   .source-dialog,
   .share-dialog,
-  .memory-dialog,
   .source-dialog::backdrop,
-  .share-dialog::backdrop,
-  .memory-dialog::backdrop {
+  .share-dialog::backdrop {
     transition: none !important;
   }
 }
