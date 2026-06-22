@@ -246,23 +246,31 @@ function renderMemories() {
   }
 
   const shouldDuplicateRows = memories.length > 4;
-  const memoryRows = [
-    {
-      className: "memory-row memory-row--primary",
-      direction: "1",
-      memories: memories.filter((_, index) => index % 3 === 0)
-    },
-    {
-      className: "memory-row memory-row--secondary",
-      direction: "-1",
-      memories: memories.filter((_, index) => index % 3 === 1)
-    },
-    {
-      className: "memory-row memory-row--tertiary",
-      direction: "1",
-      memories: memories.filter((_, index) => index % 3 === 2)
-    }
-  ].filter((rowConfig) => rowConfig.memories.length > 0);
+  const memoryRows = shouldDuplicateRows
+    ? [
+        {
+          className: "memory-row memory-row--primary",
+          direction: "1",
+          memories: memories.filter((_, index) => index % 3 === 0)
+        },
+        {
+          className: "memory-row memory-row--secondary",
+          direction: "-1",
+          memories: memories.filter((_, index) => index % 3 === 1)
+        },
+        {
+          className: "memory-row memory-row--tertiary",
+          direction: "1",
+          memories: memories.filter((_, index) => index % 3 === 2)
+        }
+      ]
+    : [
+        {
+          className: "memory-row memory-row--preview",
+          direction: "1",
+          memories
+        }
+      ];
 
   const appendMemoryCard = (row, memory, index, isClone = false) => {
     const card = document.createElement("article");

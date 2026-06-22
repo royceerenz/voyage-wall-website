@@ -1135,6 +1135,11 @@ h2 {
   scroll-snap-type: none;
 }
 
+.memory-row--preview {
+  justify-content: center;
+  cursor: default;
+}
+
 .wall-status {
   flex: 1 0 100%;
   grid-column: 1 / -1;

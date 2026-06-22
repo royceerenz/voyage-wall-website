@@ -2,6 +2,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const archiveGrid = document.querySelector("#archive-grid");
 const archiveCount = document.querySelector("#archive-count");
+const archiveMemoryCounter = document.querySelector("#archive-memory-counter");
 const loadMoreButton = document.querySelector("#load-more-memories");
 
 const SUPABASE_URL = "https://xitflvwtobrqmvdkeyjz.supabase.co";
@@ -67,10 +68,24 @@ function syncArchiveMeta() {
   const shownCount = memories.length;
   const totalLabel = totalMemories === 1 ? "memory" : "memories";
 
+  if (archiveMemoryCounter) {
+    if (totalMemories === 0) {
+      archiveMemoryCounter.textContent = "Be the first to share a moment";
+    } else if (totalMemories === 1) {
+      archiveMemoryCounter.textContent = "1 moment shared";
+    } else {
+      archiveMemoryCounter.textContent = `${totalMemories} moments shared`;
+    }
+  }
+
   if (totalMemories === 0) {
-    archiveCount.textContent = "No memories have been shared yet.";
+    if (archiveCount) {
+      archiveCount.textContent = "No memories have been shared yet.";
+    }
   } else {
-    archiveCount.textContent = `Showing ${shownCount} of ${totalMemories} ${totalLabel}.`;
+    if (archiveCount) {
+      archiveCount.textContent = `Showing ${shownCount} of ${totalMemories} ${totalLabel}.`;
+    }
   }
 
   const hasMore = shownCount < totalMemories;
