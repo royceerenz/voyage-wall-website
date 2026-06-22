@@ -175,7 +175,7 @@
 
         <form class="memory-form" id="memory-form" novalidate>
           <div class="form-card">
-            <label class="upload-card" for="photo-input" id="upload-card">
+            <label class="upload-card" for="photo-input" id="upload-card" tabindex="0">
               <input id="photo-input" name="photo" type="file" accept="image/*">
               <span class="upload-card__icon" aria-hidden="true">+</span>
               <span class="upload-card__title">Add a photo</span>
@@ -209,15 +209,17 @@
             </div>
 
             <label class="field" id="name-field">
-              <span>Your name <em>optional</em></span>
+              <span>Your name</span>
               <input
                 id="name-input"
                 name="guestName"
                 maxlength="40"
                 placeholder="A guest"
                 autocomplete="name"
+                aria-describedby="name-error"
               >
             </label>
+            <p class="field-error" id="name-error" aria-live="polite"></p>
 
             <label class="anonymous-toggle" for="anonymous-input">
               <span>

@@ -46,6 +46,28 @@
           </div>
         </section>
       </main>
+
+      <dialog class="story-viewer" id="story-viewer" aria-labelledby="story-viewer-name">
+        <button class="story-viewer__close" type="button" id="story-viewer-close" aria-label="Close memory viewer">
+          &times;
+        </button>
+
+        <button class="story-viewer__nav story-viewer__nav--previous" type="button" id="story-viewer-previous" aria-label="Previous memory">
+          &larr;
+        </button>
+
+        <article class="story-viewer__card">
+          <img id="story-viewer-image" alt="">
+          <div class="story-viewer__body">
+            <p id="story-viewer-message"></p>
+            <span id="story-viewer-name"></span>
+          </div>
+        </article>
+
+        <button class="story-viewer__nav story-viewer__nav--next" type="button" id="story-viewer-next" aria-label="Next memory">
+          &rarr;
+        </button>
+      </dialog>
     </div>
 
     <script type="module" src="./src/js/memories-archive.js"></script>

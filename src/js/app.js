@@ -14,6 +14,7 @@ const anonymousInput = document.querySelector("#anonymous-input");
 const messageCount = document.querySelector("#message-count");
 const photoError = document.querySelector("#photo-error");
 const messageError = document.querySelector("#message-error");
+const nameError = document.querySelector("#name-error");
 const submitMemory = document.querySelector("#submit-memory");
 const successPanel = document.querySelector("#success-panel");
 const shareAnother = document.querySelector("#share-another");
@@ -41,6 +42,7 @@ const MEMORY_TABLE = "memories";
 const PHOTO_BUCKET = "memory-photos";
 const FALLBACK_MEMORY_IMAGE = "./assets/mockups/voyage-wall-hero.png";
 const MESSAGE_LIMIT = 120;
+const HOMEPAGE_MEMORY_PREVIEW_LIMIT = 30;
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 messageInput.maxLength = MESSAGE_LIMIT;
@@ -55,11 +57,6 @@ let memoryRevealObserver = null;
 let sourceSelectionPending = false;
 let galleryAutoplayFrame = null;
 let galleryResumeTimer = null;
-let galleryPointerStartX = 0;
-let galleryPointerScrollLeft = 0;
-let activeGalleryRow = null;
-let isGalleryDragging = false;
-let didGalleryDrag = false;
 let galleryAutoplayStartedAt = 0;
 const GALLERY_AUTOPLAY_SPEED = 0.45;
 const GALLERY_RESUME_RAMP_MS = 900;
@@ -96,12 +93,13 @@ function closeModalWithAnimation(modal) {
 }
 
 let memories = [];
+let totalMemoryCount = 0;
 
 function updateHeroMemoryCounter() {
   const counterTarget = heroMemoryCounterText || heroMemoryCounter;
   if (!counterTarget) return;
 
-  const count = memories.length;
+  const count = totalMemoryCount;
   if (count === 0) {
     counterTarget.textContent = "Be the first to share a moment";
   } else if (count === 1) {
@@ -210,10 +208,11 @@ async function loadMemories() {
   memoryGrid.innerHTML = '<p class="wall-status">Loading shared memories...</p>';
 
   try {
-    const { data, error } = await supabase
+    const { data, error, count } = await supabase
       .from(MEMORY_TABLE)
-      .select("id, photo_url, message, name, anonymous, created_at")
-      .order("created_at", { ascending: false });
+      .select("id, photo_url, message, name, anonymous, created_at", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(0, HOMEPAGE_MEMORY_PREVIEW_LIMIT - 1);
 
     if (error) {
       console.error("[Voyage Wall] Supabase memory load failed.", {
@@ -223,6 +222,7 @@ async function loadMemories() {
       throw new Error(error.message || "Could not load memories.");
     }
 
+    totalMemoryCount = count || 0;
     memories = (data || []).map(mapSupabaseMemory);
     renderMemories();
   } catch (error) {
@@ -245,23 +245,19 @@ function renderMemories() {
     return;
   }
 
-  const shouldDuplicateRows = memories.length > 4;
-  const memoryRows = shouldDuplicateRows
+  const shouldUseFullCarousel = memories.length > 4;
+  const shouldLoopRows = memories.length > 1;
+  const memoryRows = shouldUseFullCarousel
     ? [
         {
           className: "memory-row memory-row--primary",
           direction: "1",
-          memories: memories.filter((_, index) => index % 3 === 0)
+          memories: memories.filter((_, index) => index % 2 === 0)
         },
         {
           className: "memory-row memory-row--secondary",
           direction: "-1",
-          memories: memories.filter((_, index) => index % 3 === 1)
-        },
-        {
-          className: "memory-row memory-row--tertiary",
-          direction: "1",
-          memories: memories.filter((_, index) => index % 3 === 2)
+          memories: memories.filter((_, index) => index % 2 === 1)
         }
       ]
     : [
@@ -306,7 +302,7 @@ function renderMemories() {
     return { element: row, memories: rowConfig.memories };
   });
 
-  if (shouldDuplicateRows) {
+  if (shouldLoopRows) {
     [1, 2].forEach(() => {
       rows.forEach(({ element, memories: rowMemories }) => {
         rowMemories.forEach((memory, index) => appendMemoryCard(element, memory, index, true));
@@ -318,7 +314,7 @@ function renderMemories() {
     rows.forEach(({ element }, index) => {
       const isReverseRow = element.dataset.direction === "-1";
       const loopWidth = getRowLoopWidth(element);
-      element.scrollLeft = shouldDuplicateRows && isReverseRow ? loopWidth : 0;
+      element.scrollLeft = shouldLoopRows && isReverseRow ? loopWidth : 0;
       element.dataset.scrollPosition = String(element.scrollLeft);
     });
   });
@@ -338,14 +334,16 @@ function renderMemories() {
 function addMemoryToWall(memory) {
   if (memories.some((existingMemory) => existingMemory.id === memory.id)) return;
 
+  totalMemoryCount += 1;
   memories.unshift(memory);
+  memories = memories.slice(0, HOMEPAGE_MEMORY_PREVIEW_LIMIT);
   highlightedMemoryId = memory.id;
   revealedMemoryIds.delete(memory.id);
   renderMemories();
 }
 
 function canAutoplayGallery() {
-  return !reduceMotionQuery.matches && memoryGrid.querySelectorAll('.memory-card:not([data-clone="true"])').length > 4;
+  return !reduceMotionQuery.matches && memoryGrid.querySelectorAll('.memory-card:not([data-clone="true"])').length > 1;
 }
 
 function stopGalleryAutoplay() {
@@ -365,7 +363,7 @@ function stopGalleryAutoplay() {
 }
 
 function runGalleryAutoplay() {
-  if (!canAutoplayGallery() || isGalleryDragging) {
+  if (!canAutoplayGallery()) {
     galleryAutoplayFrame = null;
     return;
   }
@@ -420,11 +418,6 @@ function scheduleGalleryAutoplay(delay = 2400) {
   }, delay);
 }
 
-function pauseGalleryAutoplay(delay = 2400) {
-  stopGalleryAutoplay();
-  scheduleGalleryAutoplay(delay);
-}
-
 function subscribeToRealtimeMemories() {
   supabase
     .channel("voyage-wall-memories")
@@ -477,52 +470,6 @@ function observeMemoryCards() {
   cards.forEach((card) => memoryRevealObserver.observe(card));
 }
 
-function beginGalleryDrag(event) {
-  if (event.pointerType === "touch") {
-    pauseGalleryAutoplay();
-    return;
-  }
-
-  if (event.button !== undefined && event.button !== 0) return;
-  const row = event.target.closest(".memory-row");
-  if (!row) return;
-
-  isGalleryDragging = true;
-  didGalleryDrag = false;
-  activeGalleryRow = row;
-  galleryPointerStartX = event.clientX;
-  galleryPointerScrollLeft = activeGalleryRow.scrollLeft;
-  activeGalleryRow.dataset.scrollPosition = String(activeGalleryRow.scrollLeft);
-  activeGalleryRow.classList.add("is-dragging");
-  activeGalleryRow.setPointerCapture?.(event.pointerId);
-  pauseGalleryAutoplay();
-}
-
-function moveGalleryDrag(event) {
-  if (!isGalleryDragging || !activeGalleryRow) return;
-
-  const deltaX = event.clientX - galleryPointerStartX;
-  if (Math.abs(deltaX) > 5) {
-    didGalleryDrag = true;
-  }
-
-  activeGalleryRow.scrollLeft = galleryPointerScrollLeft - deltaX;
-  activeGalleryRow.dataset.scrollPosition = String(activeGalleryRow.scrollLeft);
-}
-
-function endGalleryDrag(event) {
-  if (!isGalleryDragging) return;
-
-  isGalleryDragging = false;
-  activeGalleryRow?.classList.remove("is-dragging");
-  activeGalleryRow?.releasePointerCapture?.(event.pointerId);
-  activeGalleryRow = null;
-  window.setTimeout(() => {
-    didGalleryDrag = false;
-  }, 0);
-  scheduleGalleryAutoplay();
-}
-
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -534,6 +481,19 @@ function escapeHtml(value) {
 
 function setError(target, message) {
   target.textContent = message;
+}
+
+function setIdentityChoiceError(hasError) {
+  nameField.classList.toggle("has-error", hasError);
+  document.querySelector(".anonymous-toggle")?.classList.toggle("has-error", hasError);
+}
+
+function focusFormIssue(target) {
+  target?.focus({ preventScroll: true });
+  target?.scrollIntoView({
+    behavior: reduceMotionQuery.matches ? "auto" : "smooth",
+    block: "center"
+  });
 }
 
 function scrollToWall() {
@@ -629,12 +589,18 @@ function resetFormState() {
   messageCount.textContent = "0";
   setError(photoError, "");
   setError(messageError, "");
+  setError(nameError, "");
+  photoInput.removeAttribute("aria-invalid");
+  messageInput.removeAttribute("aria-invalid");
+  nameInput.removeAttribute("aria-invalid");
+  setIdentityChoiceError(false);
   submitMemory.removeAttribute("aria-busy");
   syncAnonymousField();
 }
 
 function handlePhotoFile(file) {
   setError(photoError, "");
+  photoInput.removeAttribute("aria-invalid");
   photoInput.removeAttribute("capture");
 
   if (!file) {
@@ -694,6 +660,15 @@ messageInput.addEventListener("input", () => {
   messageCount.textContent = String(messageInput.value.length);
   if (messageInput.value.trim()) {
     setError(messageError, "");
+    messageInput.removeAttribute("aria-invalid");
+  }
+});
+
+nameInput.addEventListener("input", () => {
+  if (nameInput.value.trim()) {
+    setError(nameError, "");
+    nameInput.removeAttribute("aria-invalid");
+    setIdentityChoiceError(false);
   }
 });
 
@@ -703,6 +678,8 @@ function syncAnonymousField() {
   nameInput.disabled = isAnonymous;
   if (isAnonymous) {
     nameInput.value = "";
+    setError(nameError, "");
+    setIdentityChoiceError(false);
   }
 }
 
@@ -717,34 +694,58 @@ form.addEventListener("submit", async (event) => {
   }
 
   const message = messageInput.value.trim();
-  const name = nameInput.value.trim() || "A guest";
+  const name = nameInput.value.trim();
+  const anonymous = anonymousInput.checked;
   let isValid = true;
+  let firstInvalidTarget = null;
 
   if (!selectedPhotoFile) {
     setError(photoError, "Please add a photo before sharing.");
+    photoInput.setAttribute("aria-invalid", "true");
+    firstInvalidTarget ||= uploadCard;
     isValid = false;
   } else {
     setError(photoError, "");
+    photoInput.removeAttribute("aria-invalid");
   }
 
   if (!message) {
     setError(messageError, "Please write a short message for the couple.");
+    messageInput.setAttribute("aria-invalid", "true");
+    firstInvalidTarget ||= messageInput;
     isValid = false;
   } else if (message.length > MESSAGE_LIMIT) {
     setError(messageError, `Please keep your message to ${MESSAGE_LIMIT} characters.`);
+    messageInput.setAttribute("aria-invalid", "true");
+    firstInvalidTarget ||= messageInput;
     isValid = false;
   } else {
     setError(messageError, "");
+    messageInput.removeAttribute("aria-invalid");
   }
 
-  if (!isValid) return;
+  if (!anonymous && !name) {
+    setError(nameError, "Add your name, or choose Share anonymously to post as A guest.");
+    setIdentityChoiceError(true);
+    nameInput.setAttribute("aria-invalid", "true");
+    firstInvalidTarget ||= nameInput;
+    isValid = false;
+  } else {
+    setError(nameError, "");
+    setIdentityChoiceError(false);
+    nameInput.removeAttribute("aria-invalid");
+  }
+
+  if (!isValid) {
+    focusFormIssue(firstInvalidTarget);
+    return;
+  }
 
   submitMemory.disabled = true;
   submitMemory.setAttribute("aria-busy", "true");
   submitMemory.textContent = "Adding this to the wall...";
 
   try {
-    const anonymous = anonymousInput.checked || !nameInput.value.trim();
     const photoUrl = await uploadPhoto(selectedPhotoFile);
     const memory = await insertMemory({
       photo_url: photoUrl,
@@ -833,16 +834,6 @@ viewWallAfterSubmit.addEventListener("click", () => {
 });
 
 syncAnonymousField();
-
-memoryGrid.addEventListener("pointerenter", () => pauseGalleryAutoplay());
-memoryGrid.addEventListener("pointerleave", () => scheduleGalleryAutoplay(900));
-memoryGrid.addEventListener("pointerdown", beginGalleryDrag);
-memoryGrid.addEventListener("pointermove", moveGalleryDrag);
-memoryGrid.addEventListener("pointerup", endGalleryDrag);
-memoryGrid.addEventListener("pointercancel", endGalleryDrag);
-memoryGrid.addEventListener("wheel", () => pauseGalleryAutoplay(), { passive: true });
-memoryGrid.addEventListener("touchstart", () => pauseGalleryAutoplay(), { passive: true });
-memoryGrid.addEventListener("click", () => pauseGalleryAutoplay());
 
 window.addEventListener("scroll", () => {
   const showFloatingShare = window.scrollY > window.innerHeight * 0.78;

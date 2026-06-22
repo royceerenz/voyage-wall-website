@@ -4,6 +4,13 @@ const archiveGrid = document.querySelector("#archive-grid");
 const archiveCount = document.querySelector("#archive-count");
 const archiveMemoryCounter = document.querySelector("#archive-memory-counter");
 const loadMoreButton = document.querySelector("#load-more-memories");
+const storyViewer = document.querySelector("#story-viewer");
+const storyViewerClose = document.querySelector("#story-viewer-close");
+const storyViewerPrevious = document.querySelector("#story-viewer-previous");
+const storyViewerNext = document.querySelector("#story-viewer-next");
+const storyViewerImage = document.querySelector("#story-viewer-image");
+const storyViewerMessage = document.querySelector("#story-viewer-message");
+const storyViewerName = document.querySelector("#story-viewer-name");
 
 const SUPABASE_URL = "https://xitflvwtobrqmvdkeyjz.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XbTe1Nsvr_iIaEfhEI_B1g_g8wCmd5m";
@@ -15,6 +22,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 let memories = [];
 let totalMemories = 0;
 let isLoading = false;
+let activeStoryMemoryId = null;
+
+storyViewerImage?.addEventListener("error", (event) => {
+  event.currentTarget.src = FALLBACK_MEMORY_IMAGE;
+});
 
 function mapSupabaseMemory(row) {
   const displayName = row.anonymous ? "A guest" : row.name || "A guest";
@@ -43,6 +55,9 @@ function createArchiveCard(memory) {
   const card = document.createElement("article");
   card.className = "archive-memory-card";
   card.dataset.memoryId = memory.id;
+  card.tabIndex = 0;
+  card.setAttribute("role", "button");
+  card.setAttribute("aria-label", `View memory shared by ${memory.name}`);
   card.innerHTML = `
     <img src="${memory.image}" alt="Wedding memory shared by ${escapeHtml(memory.name)}" loading="lazy" decoding="async">
     <div class="archive-memory-card__body">
@@ -54,6 +69,60 @@ function createArchiveCard(memory) {
     event.currentTarget.src = FALLBACK_MEMORY_IMAGE;
   }, { once: true });
   return card;
+}
+
+function getActiveStoryIndex() {
+  return memories.findIndex((memory) => memory.id === activeStoryMemoryId);
+}
+
+function syncStoryViewer(memory) {
+  if (
+    !memory ||
+    !storyViewerImage ||
+    !storyViewerMessage ||
+    !storyViewerName ||
+    !storyViewerPrevious ||
+    !storyViewerNext
+  ) return;
+
+  storyViewerImage.src = memory.image;
+  storyViewerImage.alt = `Wedding memory shared by ${memory.name}`;
+  storyViewerMessage.textContent = memory.message;
+  storyViewerName.textContent = memory.name;
+
+  const activeIndex = getActiveStoryIndex();
+  const hasMultipleMemories = memories.length > 1;
+  storyViewerPrevious.disabled = !hasMultipleMemories || activeIndex <= 0;
+  storyViewerNext.disabled = !hasMultipleMemories || activeIndex >= memories.length - 1;
+}
+
+function openStoryViewer(memoryId) {
+  const memory = memories.find((item) => item.id === memoryId);
+  if (!memory || !storyViewer) return;
+
+  activeStoryMemoryId = memory.id;
+  syncStoryViewer(memory);
+  storyViewer.showModal();
+  document.body.classList.add("is-dialog-open");
+}
+
+function closeStoryViewer() {
+  if (!storyViewer?.open) return;
+
+  storyViewer.close();
+  document.body.classList.remove("is-dialog-open");
+  activeStoryMemoryId = null;
+}
+
+function showAdjacentStory(direction) {
+  const activeIndex = getActiveStoryIndex();
+  if (activeIndex === -1) return;
+
+  const nextMemory = memories[activeIndex + direction];
+  if (!nextMemory) return;
+
+  activeStoryMemoryId = nextMemory.id;
+  syncStoryViewer(nextMemory);
 }
 
 function renderArchiveStatus(message, isError = false) {
@@ -159,6 +228,9 @@ function addRealtimeMemory(memory) {
   }
 
   archiveGrid.prepend(createArchiveCard(memory));
+  if (storyViewer?.open) {
+    syncStoryViewer(memories[getActiveStoryIndex()]);
+  }
   syncArchiveMeta();
 }
 
@@ -182,6 +254,52 @@ function subscribeToRealtimeMemories() {
       }
     });
 }
+
+archiveGrid.addEventListener("click", (event) => {
+  const card = event.target.closest(".archive-memory-card");
+  if (!card) return;
+  openStoryViewer(card.dataset.memoryId);
+});
+
+archiveGrid.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+
+  const card = event.target.closest(".archive-memory-card");
+  if (!card) return;
+
+  event.preventDefault();
+  openStoryViewer(card.dataset.memoryId);
+});
+
+storyViewerClose.addEventListener("click", closeStoryViewer);
+storyViewerPrevious.addEventListener("click", () => showAdjacentStory(-1));
+storyViewerNext.addEventListener("click", () => showAdjacentStory(1));
+
+storyViewer.addEventListener("click", (event) => {
+  if (event.target === storyViewer) {
+    closeStoryViewer();
+  }
+});
+
+storyViewer.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeStoryViewer();
+});
+
+storyViewer.addEventListener("close", () => {
+  document.body.classList.remove("is-dialog-open");
+  activeStoryMemoryId = null;
+});
+
+document.addEventListener("keydown", (event) => {
+  if (!storyViewer?.open) return;
+
+  if (event.key === "ArrowLeft") {
+    showAdjacentStory(-1);
+  } else if (event.key === "ArrowRight") {
+    showAdjacentStory(1);
+  }
+});
 
 loadMoreButton.addEventListener("click", loadMoreMemories);
 
