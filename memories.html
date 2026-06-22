@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>All Memories | Voyage Wall</title>
+    <meta
+      name="description"
+      content="Browse every photo and message shared on Ella and Zyrus' Voyage Wall."
+    >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="stylesheet" href="./src/css/styles.css">
+  </head>
+  <body class="archive-page">
+    <div class="app-shell">
+      <nav class="top-nav" aria-label="Primary">
+        <div class="top-nav__inner">
+          <a class="top-nav__brand" href="./index.html#home">Ella &amp; Zyrus</a>
+          <a class="top-nav__cta" href="./index.html#share">Share Moment</a>
+        </div>
+      </nav>
+
+      <main class="archive-shell">
+        <a class="archive-back-link" href="./index.html#wall">
+          <span aria-hidden="true">&larr;</span>
+          Back to Love Wall
+        </a>
+
+        <header class="archive-hero" aria-labelledby="archive-title">
+          <p class="eyebrow eyebrow--dark">Love Wall Archive</p>
+          <h1 id="archive-title">All Shared Moments</h1>
+          <p>
+            Every memory gathered from the celebration, shown newest first.
+          </p>
+        </header>
+
+        <section class="archive-section" aria-labelledby="archive-grid-title">
+          <div class="archive-section__header">
+            <h2 id="archive-grid-title">Memory Archive</h2>
+            <p id="archive-count">Loading shared memories...</p>
+          </div>
+
+          <div class="archive-grid" id="archive-grid" aria-live="polite"></div>
+
+          <div class="archive-actions">
+            <button class="button button--primary" type="button" id="load-more-memories">
+              Load More
+            </button>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./src/js/memories-archive.js"></script>
+  </body>
+</html>

@@ -31,6 +31,8 @@ const viewWallAfterSubmit = document.querySelector("#view-wall-after-submit");
 const revealSections = document.querySelectorAll("[data-scroll-reveal]");
 const smoothScrollLinks = document.querySelectorAll("[data-smooth-scroll]");
 const heroVideo = document.querySelector(".hero__video");
+const heroMemoryCounter = document.querySelector("#hero-memory-counter");
+const heroMemoryCounterText = document.querySelector(".hero-memory-counter__text");
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 const SUPABASE_URL = "https://xitflvwtobrqmvdkeyjz.supabase.co";
@@ -94,6 +96,20 @@ function closeModalWithAnimation(modal) {
 }
 
 let memories = [];
+
+function updateHeroMemoryCounter() {
+  const counterTarget = heroMemoryCounterText || heroMemoryCounter;
+  if (!counterTarget) return;
+
+  const count = memories.length;
+  if (count === 0) {
+    counterTarget.textContent = "Be the first to share a moment";
+  } else if (count === 1) {
+    counterTarget.textContent = "1 moment shared";
+  } else {
+    counterTarget.textContent = `${count} moments shared`;
+  }
+}
 
 function mapSupabaseMemory(row) {
   const displayName = row.anonymous ? "A guest" : row.name || "A guest";
@@ -221,27 +237,32 @@ async function loadMemories() {
 
 function renderMemories() {
   memoryGrid.innerHTML = "";
+  updateHeroMemoryCounter();
+
   if (memories.length === 0) {
     memoryGrid.innerHTML = '<p class="wall-status">No memories have been shared yet.</p>';
     stopGalleryAutoplay();
     return;
   }
 
-  const firstRow = document.createElement("div");
-  const secondRow = document.createElement("div");
-  const thirdRow = document.createElement("div");
-  firstRow.className = "memory-row memory-row--primary";
-  secondRow.className = "memory-row memory-row--secondary";
-  thirdRow.className = "memory-row memory-row--tertiary";
-  firstRow.dataset.direction = "1";
-  secondRow.dataset.direction = "-1";
-  thirdRow.dataset.direction = "1";
-  memoryGrid.append(firstRow, secondRow, thirdRow);
-
   const shouldDuplicateRows = memories.length > 4;
-  const firstRowMemories = memories.filter((_, index) => index % 3 === 0);
-  const secondRowMemories = memories.filter((_, index) => index % 3 === 1);
-  const thirdRowMemories = memories.filter((_, index) => index % 3 === 2);
+  const memoryRows = [
+    {
+      className: "memory-row memory-row--primary",
+      direction: "1",
+      memories: memories.filter((_, index) => index % 3 === 0)
+    },
+    {
+      className: "memory-row memory-row--secondary",
+      direction: "-1",
+      memories: memories.filter((_, index) => index % 3 === 1)
+    },
+    {
+      className: "memory-row memory-row--tertiary",
+      direction: "1",
+      memories: memories.filter((_, index) => index % 3 === 2)
+    }
+  ].filter((rowConfig) => rowConfig.memories.length > 0);
 
   const appendMemoryCard = (row, memory, index, isClone = false) => {
     const card = document.createElement("article");
@@ -268,26 +289,30 @@ function renderMemories() {
     row.append(card);
   };
 
-  firstRowMemories.forEach((memory, index) => appendMemoryCard(firstRow, memory, index));
-  secondRowMemories.forEach((memory, index) => appendMemoryCard(secondRow, memory, index));
-  thirdRowMemories.forEach((memory, index) => appendMemoryCard(thirdRow, memory, index));
+  const rows = memoryRows.map((rowConfig) => {
+    const row = document.createElement("div");
+    row.className = rowConfig.className;
+    row.dataset.direction = rowConfig.direction;
+    memoryGrid.append(row);
+    rowConfig.memories.forEach((memory, index) => appendMemoryCard(row, memory, index));
+    return { element: row, memories: rowConfig.memories };
+  });
 
   if (shouldDuplicateRows) {
     [1, 2].forEach(() => {
-      firstRowMemories.forEach((memory, index) => appendMemoryCard(firstRow, memory, index, true));
-      secondRowMemories.forEach((memory, index) => appendMemoryCard(secondRow, memory, index, true));
-      thirdRowMemories.forEach((memory, index) => appendMemoryCard(thirdRow, memory, index, true));
+      rows.forEach(({ element, memories: rowMemories }) => {
+        rowMemories.forEach((memory, index) => appendMemoryCard(element, memory, index, true));
+      });
     });
   }
 
   requestAnimationFrame(() => {
-    firstRow.scrollLeft = 0;
-    const secondLoopWidth = getRowLoopWidth(secondRow);
-    thirdRow.scrollLeft = 0;
-    secondRow.scrollLeft = shouldDuplicateRows ? secondLoopWidth : 0;
-    firstRow.dataset.scrollPosition = String(firstRow.scrollLeft);
-    secondRow.dataset.scrollPosition = String(secondRow.scrollLeft);
-    thirdRow.dataset.scrollPosition = String(thirdRow.scrollLeft);
+    rows.forEach(({ element }, index) => {
+      const isReverseRow = element.dataset.direction === "-1";
+      const loopWidth = getRowLoopWidth(element);
+      element.scrollLeft = shouldDuplicateRows && isReverseRow ? loopWidth : 0;
+      element.dataset.scrollPosition = String(element.scrollLeft);
+    });
   });
   observeMemoryCards();
   scheduleGalleryAutoplay(700);

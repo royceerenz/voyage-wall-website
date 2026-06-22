@@ -50,7 +50,10 @@
           </a>
         </div>
 
-        <a class="scroll-cue" href="#wall" data-smooth-scroll>Scroll to view shared moments</a>
+        <a class="scroll-cue hero-memory-counter" id="hero-memory-counter" href="#wall" data-smooth-scroll aria-live="polite">
+          <span class="hero-memory-counter__arrow" aria-hidden="true">&darr;</span>
+          <span class="hero-memory-counter__text">Loading moments shared...</span>
+        </a>
       </header>
 
       <main>
@@ -65,6 +68,12 @@
 
           <div class="memory-gallery" id="memory-gallery">
             <div class="memory-grid" id="memory-grid" aria-live="polite"></div>
+          </div>
+
+          <div class="wall-section__actions">
+            <a class="button button--secondary" href="./memories.html">
+              See All Shared Moments
+            </a>
           </div>
         </section>
 
