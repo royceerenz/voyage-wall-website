@@ -17,6 +17,10 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_XbTe1Nsvr_iIaEfhEI_B1g_g8wCmd5m
 const MEMORY_TABLE = "memories";
 const FALLBACK_MEMORY_IMAGE = "./assets/mockups/voyage-wall-hero.png";
 const PAGE_SIZE = 10;
+const MESSAGE_LIMIT = 120;
+const MEMORY_SELECT_FIELDS = "id, photo_url, original_image_url, optimized_image_url, image_url, message, name, anonymous, created_at";
+const MEMORY_SELECT_FIELDS_WITHOUT_IMAGE_URL = "id, photo_url, original_image_url, optimized_image_url, message, name, anonymous, created_at";
+const LEGACY_MEMORY_SELECT_FIELDS = "id, photo_url, message, name, anonymous, created_at";
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 let memories = [];
@@ -30,11 +34,15 @@ storyViewerImage?.addEventListener("error", (event) => {
 
 function mapSupabaseMemory(row) {
   const displayName = row.anonymous ? "A guest" : row.name || "A guest";
+  const displayImage = row.optimized_image_url || row.image_url || row.photo_url || FALLBACK_MEMORY_IMAGE;
 
   return {
     id: String(row.id),
-    image: row.photo_url || FALLBACK_MEMORY_IMAGE,
+    image: displayImage,
     photo_url: row.photo_url,
+    original_image_url: row.original_image_url,
+    optimized_image_url: row.optimized_image_url,
+    image_url: row.image_url,
     message: row.message || "",
     name: displayName,
     anonymous: Boolean(row.anonymous),
@@ -58,11 +66,19 @@ function createArchiveCard(memory) {
   card.tabIndex = 0;
   card.setAttribute("role", "button");
   card.setAttribute("aria-label", `View memory shared by ${memory.name}`);
+  const displayMessage = String(memory.message || "").slice(0, MESSAGE_LIMIT);
   card.innerHTML = `
-    <img src="${memory.image}" alt="Wedding memory shared by ${escapeHtml(memory.name)}" loading="lazy" decoding="async">
+    <div class="archive-memory-card__image-frame">
+      <img class="archive-memory-card__image" src="${memory.image}" alt="Wedding memory shared by ${escapeHtml(memory.name)}" loading="lazy" decoding="async">
+      <p class="archive-memory-card__message">
+        <span class="archive-memory-card__message-text">${escapeHtml(displayMessage)}</span>
+      </p>
+    </div>
     <div class="archive-memory-card__body">
-      <p>${escapeHtml(memory.message)}</p>
-      <span>${escapeHtml(memory.name)}</span>
+      <div class="archive-memory-card__attribution">
+        <span class="archive-memory-card__label">FROM:</span>
+        <span class="archive-memory-card__name">${escapeHtml(memory.name)}</span>
+      </div>
     </div>
   `;
   card.querySelector("img").addEventListener("error", (event) => {
@@ -182,11 +198,27 @@ async function loadMoreMemories() {
   try {
     const from = memories.length;
     const to = from + PAGE_SIZE - 1;
-    const { data, error, count } = await supabase
+    let { data, error, count } = await supabase
       .from(MEMORY_TABLE)
-      .select("id, photo_url, message, name, anonymous, created_at", { count: "exact" })
+      .select(MEMORY_SELECT_FIELDS, { count: "exact" })
       .order("created_at", { ascending: false })
       .range(from, to);
+
+    if (error) {
+      ({ data, error, count } = await supabase
+        .from(MEMORY_TABLE)
+        .select(MEMORY_SELECT_FIELDS_WITHOUT_IMAGE_URL, { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(from, to));
+    }
+
+    if (error) {
+      ({ data, error, count } = await supabase
+        .from(MEMORY_TABLE)
+        .select(LEGACY_MEMORY_SELECT_FIELDS, { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(from, to));
+    }
 
     if (error) {
       console.error("[Voyage Wall] Archive memory load failed.", {

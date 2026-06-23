@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin Wall | Voyage Wall</title>
+    <meta
+      name="description"
+      content="Protected admin view of the Voyage Wall."
+    >
+    <script>
+      if (localStorage.getItem("voyagewall_admin") !== "true") {
+        window.location.replace("/admin-login-client");
+      }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="../src/css/styles.css">
+  </head>
+  <body class="admin-wall-page admin-manager-page">
+    <main class="admin-manager-shell" aria-label="Admin memories manager">
+      <header class="admin-manager-header">
+        <div>
+          <p class="eyebrow eyebrow--dark">Voyage Wall Admin</p>
+          <h1>Archived Memories</h1>
+        </div>
+      </header>
+
+      <section class="admin-wall-toolbar" aria-label="Admin memory tools">
+        <span class="admin-wall-toolbar__badge">ADMIN MODE</span>
+        <span class="admin-wall-toolbar__count" id="admin-selected-count">Selected: 0 / 0</span>
+        <button class="button button--ghost" type="button" id="admin-select-all">Select All</button>
+        <button class="button button--ghost" type="button" id="admin-clear-selection">Clear Selection</button>
+        <button class="button button--secondary" type="button" id="admin-download-selected">Download Selected</button>
+        <button class="button button--secondary" type="button" id="admin-download-all">Download All</button>
+        <button class="button button--ghost" type="button" id="admin-sign-out">Sign Out</button>
+        <span class="admin-wall-toolbar__status" id="admin-download-status" role="status" aria-live="polite"></span>
+      </section>
+
+      <section class="admin-memory-grid" id="admin-memory-grid" aria-live="polite">
+        <p class="wall-status">Loading uploaded memories...</p>
+      </section>
+    </main>
+
+    <script type="module" src="../src/js/admin-wall.js"></script>
+  </body>
+</html>

@@ -43,7 +43,13 @@ const PHOTO_BUCKET = "memory-photos";
 const FALLBACK_MEMORY_IMAGE = "./assets/mockups/voyage-wall-hero.png";
 const MESSAGE_LIMIT = 120;
 const HOMEPAGE_MEMORY_PREVIEW_LIMIT = 30;
+const ADMIN_MEMORY_PREVIEW_LIMIT = 1000;
+const ADMIN_SESSION_KEY = "voyagewall_admin";
+const MEMORY_SELECT_FIELDS = "id, photo_url, original_image_url, optimized_image_url, image_url, message, name, anonymous, created_at";
+const MEMORY_SELECT_FIELDS_WITHOUT_IMAGE_URL = "id, photo_url, original_image_url, optimized_image_url, message, name, anonymous, created_at";
+const LEGACY_MEMORY_SELECT_FIELDS = "id, photo_url, message, name, anonymous, created_at";
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+const isAdminMode = false;
 
 messageInput.maxLength = MESSAGE_LIMIT;
 
@@ -58,8 +64,13 @@ let sourceSelectionPending = false;
 let galleryAutoplayFrame = null;
 let galleryResumeTimer = null;
 let galleryAutoplayStartedAt = 0;
+const selectedMemoryIds = new Set();
 const GALLERY_AUTOPLAY_SPEED = 0.45;
 const GALLERY_RESUME_RAMP_MS = 900;
+
+if (isAdminMode) {
+  document.body.classList.add("is-admin-wall");
+}
 
 if (heroVideo) {
   const syncHeroVideoMotion = () => {
@@ -111,11 +122,17 @@ function updateHeroMemoryCounter() {
 
 function mapSupabaseMemory(row) {
   const displayName = row.anonymous ? "A guest" : row.name || "A guest";
+  const displayImage = row.optimized_image_url || row.image_url || row.photo_url || FALLBACK_MEMORY_IMAGE;
+  const originalImage = row.original_image_url || row.optimized_image_url || row.image_url || row.photo_url || FALLBACK_MEMORY_IMAGE;
 
   return {
     id: String(row.id),
-    image: row.photo_url || FALLBACK_MEMORY_IMAGE,
+    image: displayImage,
     photo_url: row.photo_url,
+    original_image_url: row.original_image_url,
+    optimized_image_url: row.optimized_image_url,
+    image_url: row.image_url,
+    downloadImage: originalImage,
     message: row.message || "",
     name: displayName,
     anonymous: Boolean(row.anonymous),
@@ -128,16 +145,158 @@ function publicStorageUrl(path) {
   return data.publicUrl;
 }
 
+function getAdminToolbar() {
+  return document.querySelector("#admin-wall-toolbar");
+}
+
+function sanitizeDownloadPart(value) {
+  return String(value || "guest")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "guest";
+}
+
+function getDownloadFilename(memory) {
+  const guestName = sanitizeDownloadPart(memory.name);
+  const memoryId = sanitizeDownloadPart(memory.id);
+  return `voyage-wall-${guestName}-${memoryId}`;
+}
+
+function downloadMemory(memory) {
+  if (!memory?.image) return;
+
+  const link = document.createElement("a");
+  link.href = memory.image;
+  link.download = getDownloadFilename(memory);
+  link.target = "_blank";
+  link.rel = "noopener";
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
+function updateAdminSelectionUi() {
+  if (!isAdminMode) return;
+
+  const selectedCount = selectedMemoryIds.size;
+  const countLabel = document.querySelector("#admin-selected-count");
+  if (countLabel) {
+    countLabel.textContent = `Selected: ${selectedCount} / ${totalMemoryCount || memories.length}`;
+  }
+
+  document.querySelectorAll(".memory-card").forEach((card) => {
+    const isSelected = selectedMemoryIds.has(card.dataset.memoryId);
+    card.classList.toggle("is-admin-selected", isSelected);
+    const checkbox = card.querySelector(".memory-card__select-input");
+    if (checkbox) {
+      checkbox.checked = isSelected;
+    }
+  });
+
+  document.querySelector("#admin-download-selected")?.toggleAttribute("disabled", selectedCount === 0);
+  document.querySelector("#admin-clear-selection")?.toggleAttribute("disabled", selectedCount === 0);
+  document.querySelector("#admin-select-all")?.toggleAttribute("disabled", memories.length === 0);
+  document.querySelector("#admin-download-all")?.toggleAttribute("disabled", memories.length === 0);
+}
+
+function toggleSelect(memoryId) {
+  if (!memoryId) return;
+
+  if (selectedMemoryIds.has(memoryId)) {
+    selectedMemoryIds.delete(memoryId);
+  } else {
+    selectedMemoryIds.add(memoryId);
+  }
+
+  updateAdminSelectionUi();
+}
+
+function selectAll() {
+  memories.forEach((memory) => selectedMemoryIds.add(memory.id));
+  updateAdminSelectionUi();
+}
+
+function clearSelection() {
+  selectedMemoryIds.clear();
+  updateAdminSelectionUi();
+}
+
+function downloadSelected() {
+  const selectedMemories = memories.filter((memory) => selectedMemoryIds.has(memory.id));
+  selectedMemories.forEach(downloadMemory);
+}
+
+function downloadAll() {
+  memories.forEach(downloadMemory);
+}
+
+function signOutAdmin() {
+  localStorage.removeItem(ADMIN_SESSION_KEY);
+  window.top.location.assign("/admin-login-client");
+}
+
+function createAdminToolbar() {
+  if (!isAdminMode || getAdminToolbar()) return;
+
+  const wallHeader = document.querySelector(".wall-section__header");
+  const toolbar = document.createElement("div");
+  toolbar.className = "admin-wall-toolbar";
+  toolbar.id = "admin-wall-toolbar";
+  toolbar.innerHTML = `
+    <span class="admin-wall-toolbar__badge">ADMIN MODE</span>
+    <span class="admin-wall-toolbar__count" id="admin-selected-count">Selected: 0 / 0</span>
+    <button class="button button--ghost" type="button" id="admin-select-all">Select All</button>
+    <button class="button button--ghost" type="button" id="admin-clear-selection">Clear Selection</button>
+    <button class="button button--secondary" type="button" id="admin-download-selected">Download Selected</button>
+    <button class="button button--secondary" type="button" id="admin-download-all">Download All</button>
+    <button class="button button--ghost" type="button" id="admin-toolbar-sign-out">Sign Out</button>
+  `;
+
+  toolbar.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+  toolbar.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+  });
+
+  wallHeader?.after(toolbar);
+
+  document.querySelector("#admin-select-all")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    selectAll();
+  });
+  document.querySelector("#admin-clear-selection")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    clearSelection();
+  });
+  document.querySelector("#admin-download-selected")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    downloadSelected();
+  });
+  document.querySelector("#admin-download-all")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    downloadAll();
+  });
+  document.querySelector("#admin-toolbar-sign-out")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    signOutAdmin();
+  });
+
+  updateAdminSelectionUi();
+}
+
 function getFileExtension(file) {
   const nameExtension = file.name.split(".").pop();
   if (nameExtension && nameExtension !== file.name) return nameExtension.toLowerCase();
   return file.type.split("/").pop() || "jpg";
 }
 
-function createUniquePhotoPath(file) {
-  const extension = getFileExtension(file);
+function createUniquePhotoPath(file, folder = "optimized", extension = getFileExtension(file)) {
   const uniqueId = crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return `public/${uniqueId}.${extension}`;
+  return `${folder}/${uniqueId}.${extension}`;
 }
 
 function isSupportedPhotoFile(file) {
@@ -146,43 +305,181 @@ function isSupportedPhotoFile(file) {
   return file.type.startsWith("image/") || allowedExtensions.includes(extension);
 }
 
-async function uploadPhoto(file) {
-  const filePath = createUniquePhotoPath(file);
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+      } else {
+        reject(new Error("Could not create optimized image."));
+      }
+    }, type, quality);
+  });
+}
 
+async function supportsWebpOutput() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1;
+  canvas.height = 1;
+  const blob = await canvasToBlob(canvas, "image/webp", 0.8).catch(() => null);
+  return blob?.type === "image/webp";
+}
+
+async function createOptimizedImage(file) {
+  const imageBitmap = await createImageBitmap(file);
+  const maxWidth = 1600;
+  const scale = Math.min(1, maxWidth / imageBitmap.width);
+  const width = Math.max(1, Math.round(imageBitmap.width * scale));
+  const height = Math.max(1, Math.round(imageBitmap.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) {
+    throw new Error("Could not prepare optimized image.");
+  }
+  context.drawImage(imageBitmap, 0, 0, width, height);
+  imageBitmap.close?.();
+
+  const type = await supportsWebpOutput() ? "image/webp" : "image/jpeg";
+  const extension = type === "image/webp" ? "webp" : "jpg";
+  const qualitySteps = [0.8, 0.75, 0.7, 0.65];
+  let optimizedBlob = null;
+
+  for (const quality of qualitySteps) {
+    optimizedBlob = await canvasToBlob(canvas, type, quality);
+    if (optimizedBlob.size <= 900 * 1024) break;
+  }
+
+  return {
+    blob: optimizedBlob,
+    extension,
+    type
+  };
+}
+
+async function uploadToMemoryStorage(fileOrBlob, path, contentType) {
   const { data, error } = await supabase.storage
     .from(PHOTO_BUCKET)
-    .upload(filePath, file, {
+    .upload(path, fileOrBlob, {
       cacheControl: "3600",
-      contentType: file.type || "application/octet-stream",
+      contentType: contentType || fileOrBlob.type || "application/octet-stream",
       upsert: false
     });
 
   if (error) {
     console.error("[Voyage Wall] Supabase photo upload failed.", {
       bucket: PHOTO_BUCKET,
-      path: filePath,
+      path,
       error
     });
     throw new Error(`Storage upload failed: ${error.message || "Photo upload failed."}`);
   }
 
-  const photoUrl = publicStorageUrl(data.path);
-  return photoUrl;
+  return publicStorageUrl(data.path);
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      const dataUrl = String(reader.result || "");
+      resolve(dataUrl.split(",")[1] || "");
+    });
+    reader.addEventListener("error", () => {
+      reject(new Error("Could not read original photo."));
+    });
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadOriginalToGoogleDrive(file) {
+  const data = await readFileAsBase64(file);
+  const response = await fetch("/api/google-drive-upload", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      filename: file.name || `voyage-wall-original.${getFileExtension(file)}`,
+      mimeType: file.type || "application/octet-stream",
+      data
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error("Google Drive original upload failed.");
+  }
+
+  const result = await response.json();
+  if (!result?.original_image_url) {
+    throw new Error("Google Drive original upload did not return a file reference.");
+  }
+
+  return result.original_image_url;
+}
+
+async function uploadPhotoVersions(file) {
+  const originalImageUrl = await uploadOriginalToGoogleDrive(file);
+  const optimizedImage = await createOptimizedImage(file);
+  const optimizedPath = createUniquePhotoPath(file, "optimized", optimizedImage.extension);
+  const optimizedImageUrl = await uploadToMemoryStorage(
+    optimizedImage.blob,
+    optimizedPath,
+    optimizedImage.type
+  );
+
+  return {
+    original_image_url: originalImageUrl,
+    optimized_image_url: optimizedImageUrl
+  };
 }
 
 async function insertMemory(memoryPayload) {
   const allowedInsertPayload = {
-    photo_url: memoryPayload.photo_url,
+    photo_url: memoryPayload.optimized_image_url,
+    image_url: memoryPayload.optimized_image_url,
+    original_image_url: memoryPayload.original_image_url,
+    optimized_image_url: memoryPayload.optimized_image_url,
     message: memoryPayload.message,
     name: memoryPayload.name,
     anonymous: memoryPayload.anonymous
   };
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from(MEMORY_TABLE)
     .insert(allowedInsertPayload)
-    .select("id, photo_url, message, name, anonymous, created_at")
+    .select(MEMORY_SELECT_FIELDS)
     .single();
+
+  if (error) {
+    ({ data, error } = await supabase
+      .from(MEMORY_TABLE)
+      .insert({
+        photo_url: memoryPayload.optimized_image_url,
+        original_image_url: memoryPayload.original_image_url,
+        optimized_image_url: memoryPayload.optimized_image_url,
+        message: memoryPayload.message,
+        name: memoryPayload.name,
+        anonymous: memoryPayload.anonymous
+      })
+      .select(MEMORY_SELECT_FIELDS_WITHOUT_IMAGE_URL)
+      .single());
+  }
+
+  if (error) {
+    console.warn("[Voyage Wall] New image URL columns unavailable. Falling back to legacy memory insert.", error);
+    ({ data, error } = await supabase
+      .from(MEMORY_TABLE)
+      .insert({
+        photo_url: memoryPayload.optimized_image_url,
+        message: memoryPayload.message,
+        name: memoryPayload.name,
+        anonymous: memoryPayload.anonymous
+      })
+      .select(LEGACY_MEMORY_SELECT_FIELDS)
+      .single());
+  }
 
   if (error) {
     console.error("[Voyage Wall] Supabase memory insert failed.", {
@@ -208,11 +505,28 @@ async function loadMemories() {
   memoryGrid.innerHTML = '<p class="wall-status">Loading shared memories...</p>';
 
   try {
-    const { data, error, count } = await supabase
+    const memoryLimit = isAdminMode ? ADMIN_MEMORY_PREVIEW_LIMIT : HOMEPAGE_MEMORY_PREVIEW_LIMIT;
+    let { data, error, count } = await supabase
       .from(MEMORY_TABLE)
-      .select("id, photo_url, message, name, anonymous, created_at", { count: "exact" })
+      .select(MEMORY_SELECT_FIELDS, { count: "exact" })
       .order("created_at", { ascending: false })
-      .range(0, HOMEPAGE_MEMORY_PREVIEW_LIMIT - 1);
+      .range(0, memoryLimit - 1);
+
+    if (error) {
+      ({ data, error, count } = await supabase
+        .from(MEMORY_TABLE)
+        .select(MEMORY_SELECT_FIELDS_WITHOUT_IMAGE_URL, { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(0, memoryLimit - 1));
+    }
+
+    if (error) {
+      ({ data, error, count } = await supabase
+        .from(MEMORY_TABLE)
+        .select(LEGACY_MEMORY_SELECT_FIELDS, { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(0, memoryLimit - 1));
+    }
 
     if (error) {
       console.error("[Voyage Wall] Supabase memory load failed.", {
@@ -238,10 +552,17 @@ async function loadMemories() {
 function renderMemories() {
   memoryGrid.innerHTML = "";
   updateHeroMemoryCounter();
+  createAdminToolbar();
+  selectedMemoryIds.forEach((memoryId) => {
+    if (!memories.some((memory) => memory.id === memoryId)) {
+      selectedMemoryIds.delete(memoryId);
+    }
+  });
 
   if (memories.length === 0) {
     memoryGrid.innerHTML = '<p class="wall-status">No memories have been shared yet.</p>';
     stopGalleryAutoplay();
+    updateAdminSelectionUi();
     return;
   }
 
@@ -280,13 +601,41 @@ function renderMemories() {
     if (revealedMemoryIds.has(memory.id)) {
       card.classList.add("is-visible");
     }
+    const displayMessage = String(memory.message || "").slice(0, MESSAGE_LIMIT);
     card.innerHTML = `
-      <img src="${memory.image}" alt="Wedding memory shared by ${escapeHtml(memory.name)}" loading="lazy" decoding="async">
+      <div class="memory-card__image-frame">
+        <img class="memory-card__image" src="${memory.image}" alt="Wedding memory shared by ${escapeHtml(memory.name)}" loading="lazy" decoding="async">
+        <p class="memory-card__message">
+          <span class="memory-card__message-text">${escapeHtml(displayMessage)}</span>
+        </p>
+      </div>
       <div class="memory-card__body">
-        <p>${escapeHtml(memory.message)}</p>
-        <span class="memory-card__name">${escapeHtml(memory.name)}</span>
+        <div class="memory-card__attribution">
+          <span class="memory-card__label">FROM:</span>
+          <span class="memory-card__name">${escapeHtml(memory.name)}</span>
+        </div>
       </div>
     `;
+    if (isAdminMode) {
+      const selectLabel = document.createElement("label");
+      selectLabel.className = "memory-card__select";
+      selectLabel.setAttribute("aria-label", `Select memory shared by ${memory.name}`);
+      selectLabel.innerHTML = `
+        <input class="memory-card__select-input" type="checkbox" value="${escapeHtml(memory.id)}">
+        <span class="memory-card__select-box" aria-hidden="true"></span>
+      `;
+      selectLabel.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+      });
+      selectLabel.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+      selectLabel.querySelector("input").addEventListener("change", (event) => {
+        event.stopPropagation();
+        toggleSelect(memory.id);
+      });
+      card.prepend(selectLabel);
+    }
     card.querySelector("img").addEventListener("error", (event) => {
       event.currentTarget.src = FALLBACK_MEMORY_IMAGE;
     }, { once: true });
@@ -320,6 +669,7 @@ function renderMemories() {
   });
   observeMemoryCards();
   scheduleGalleryAutoplay(700);
+  updateAdminSelectionUi();
 
   if (highlightedMemoryId) {
     window.setTimeout(() => {
@@ -746,9 +1096,10 @@ form.addEventListener("submit", async (event) => {
   submitMemory.textContent = "Adding this to the wall...";
 
   try {
-    const photoUrl = await uploadPhoto(selectedPhotoFile);
+    const photoVersions = await uploadPhotoVersions(selectedPhotoFile);
     const memory = await insertMemory({
-      photo_url: photoUrl,
+      original_image_url: photoVersions.original_image_url,
+      optimized_image_url: photoVersions.optimized_image_url,
       message,
       name: anonymous ? null : name,
       anonymous

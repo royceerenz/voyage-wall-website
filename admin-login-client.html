@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin Login | Voyage Wall</title>
+    <meta
+      name="description"
+      content="Admin login for the Voyage Wall event wall."
+    >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="./src/css/styles.css">
+  </head>
+  <body class="admin-auth-page">
+    <main class="admin-auth-shell">
+      <section class="admin-auth-card" aria-labelledby="admin-login-title">
+        <p class="eyebrow eyebrow--dark">Voyage Wall Admin</p>
+        <h1 id="admin-login-title">Sign In</h1>
+        <p class="admin-auth-copy">
+          Enter the event admin credentials to manage the wall.
+        </p>
+
+        <form class="admin-login-form" id="admin-login-form" novalidate>
+          <label class="field">
+            <span>Username</span>
+            <input
+              id="admin-username"
+              name="username"
+              type="text"
+              autocomplete="username"
+              required
+            >
+          </label>
+
+          <label class="field">
+            <span>Password</span>
+            <input
+              id="admin-password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+            >
+          </label>
+
+          <p class="field-error" id="admin-login-error" role="alert"></p>
+
+          <button class="button button--primary button--wide" type="submit" id="admin-login-button">
+            Sign In
+          </button>
+        </form>
+      </section>
+    </main>
+
+    <script type="module" src="./src/js/admin-login.js"></script>
+  </body>
+</html>

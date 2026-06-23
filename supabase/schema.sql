@@ -32,6 +32,9 @@
 --    - message: guest message
 --    - image_path: storage path for uploaded image
 --    - display_image_path: optimized public display image path
+--    - original_image_url: Google Drive original file reference for admin exports/downloads
+--    - optimized_image_url: optimized public display URL for wall/archive previews
+--    - image_url/photo_url: legacy display URL retained for backward compatibility
 --    - thumb_image_path: optional thumbnail path
 --    - image_width: optional metadata
 --    - image_height: optional metadata
@@ -113,3 +116,11 @@
 -- - Is there a separate optimized image rendition path? Recommended: yes, display_image_path is required for public wall performance.
 -- - Is admin auth required for MVP? Recommended: yes for any hide/delete/close-submissions controls.
 -- - Where is rate limiting enforced: edge function, app server, Supabase policy, or external service?
+
+-- Image storage structure:
+-- - Google Drive: original full-quality files, preserving original format where possible.
+-- - memory-photos/optimized/: optimized display copies, max width 1600px, WebP/JPEG, quality 0.75-0.8.
+-- - Public wall display order: optimized_image_url, then image_url/photo_url fallback.
+-- - Admin preview display order: optimized_image_url, then image_url/photo_url fallback.
+-- - Admin download order: original_image_url, then optimized_image_url, then image_url/photo_url fallback.
+-- - Legacy records with Supabase originals in original_image_url remain downloadable through the same fallback path.

@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/admin-login-client",
+      "destination": "/admin-login-client.html"
+    },
+    {
+      "source": "/admin/wall",
+      "destination": "/admin/wall.html"
+    },
+    {
       "source": "/",
       "destination": "/index.html"
     }

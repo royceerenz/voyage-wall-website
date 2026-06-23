@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Allura&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&display=swap');
 
 :root {
   --navy-950: #0d2035;
@@ -19,6 +20,7 @@
   --radius: 18px;
   --sans: "Inter", "Poppins", "Avenir Next", "Segoe UI", Arial, sans-serif;
   --script: "Allura", "Corinthia", "Edwardian Script ITC", "Segoe Script", cursive;
+  --handwritten: "Caveat", "Segoe Print", "Bradley Hand ITC", cursive;
   --serif: Georgia, "Times New Roman", serif;
 }
 
@@ -1113,9 +1115,60 @@ h2 {
 
 .memory-grid {
   display: grid;
-  gap: 8px;
-  padding-block: 8px 4px;
+  gap: 4px;
+  padding-block: 8px 10px;
   min-width: 0;
+}
+
+.admin-wall-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: -6px 0 16px;
+  padding: 12px;
+  border: 1px solid rgba(23, 48, 74, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 10px 22px rgba(15, 34, 56, 0.08);
+}
+
+.admin-wall-toolbar__badge,
+.admin-wall-toolbar__count {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  border-radius: 999px;
+}
+
+.admin-wall-toolbar__badge {
+  padding: 0 12px;
+  color: var(--pearl);
+  background: var(--navy-800);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.admin-wall-toolbar__count {
+  padding: 0 10px;
+  color: var(--navy-800);
+  background: rgba(216, 228, 236, 0.56);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.admin-wall-toolbar__status {
+  min-height: 20px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.admin-wall-toolbar .button {
+  min-height: 34px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
 }
 
 .wall-section__actions {
@@ -1174,15 +1227,22 @@ h2 {
 }
 
 .memory-card {
+  position: relative;
   display: flex;
-  flex: 0 0 clamp(236px, 30vw, 340px);
+  flex: 0 0 clamp(236px, 28vw, 326px);
   flex-direction: column;
   min-height: max-content;
   overflow: hidden;
-  border: 1px solid rgba(23, 48, 74, 0.1);
-  border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: var(--soft-shadow);
+  padding: clamp(12px, 2vw, 18px) clamp(12px, 2vw, 18px) clamp(18px, 2.5vw, 24px);
+  border: 1px solid rgba(226, 218, 204, 0.86);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 24% 18%, rgba(255, 255, 255, 0.88) 0 1px, transparent 1px 4px),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(250, 247, 241, 0.96));
+  box-shadow:
+    0 10px 18px rgba(15, 34, 56, 0.12),
+    0 2px 6px rgba(15, 34, 56, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
   cursor: default;
   opacity: 0;
   transform: translateY(16px) scale(0.98);
@@ -1191,8 +1251,64 @@ h2 {
   scroll-snap-align: start;
 }
 
+.memory-card.is-admin-selected {
+  border-color: rgba(36, 70, 101, 0.48);
+  box-shadow:
+    0 0 0 3px rgba(169, 190, 208, 0.36),
+    0 10px 18px rgba(15, 34, 56, 0.12),
+    0 2px 6px rgba(15, 34, 56, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.memory-card__select {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 4;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 6px 14px rgba(5, 18, 32, 0.18);
+  cursor: pointer;
+}
+
+.memory-card__select-input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  clip: rect(0 0 0 0);
+  overflow: hidden;
+}
+
+.memory-card__select-box {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(36, 70, 101, 0.72);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.memory-card__select-input:checked + .memory-card__select-box {
+  border-color: var(--navy-800);
+  background:
+    linear-gradient(135deg, transparent 0 42%, #ffffff 42% 58%, transparent 58%),
+    linear-gradient(45deg, transparent 0 45%, #ffffff 45% 61%, transparent 61%),
+    var(--navy-800);
+}
+
+.memory-card__select-input:focus-visible + .memory-card__select-box {
+  outline: 3px solid rgba(169, 190, 208, 0.85);
+  outline-offset: 3px;
+}
+
 .memory-row--secondary .memory-card {
-  background: rgba(255, 252, 245, 0.9);
+  background:
+    radial-gradient(circle at 24% 18%, rgba(255, 255, 255, 0.88) 0 1px, transparent 1px 4px),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(252, 248, 241, 0.98));
 }
 
 .memory-card.is-visible {
@@ -1210,7 +1326,10 @@ h2 {
 .memory-card:hover,
 .memory-card:focus-visible {
   transform: translateY(-3px);
-  box-shadow: var(--shadow);
+  box-shadow:
+    0 14px 24px rgba(15, 34, 56, 0.15),
+    0 4px 10px rgba(15, 34, 56, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 
 .memory-card:focus-visible {
@@ -1218,32 +1337,99 @@ h2 {
   outline-offset: 3px;
 }
 
-.memory-card img {
+.memory-card__image-frame {
+  position: relative;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 1;
   flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 7px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.74),
+    0 0 0 1px rgba(18, 34, 48, 0.1);
+  isolation: isolate;
+}
+
+.memory-card__image-frame::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  height: 58%;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0));
+  content: "";
+  pointer-events: none;
+}
+
+.memory-card__image {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   display: block;
 }
 
 .memory-card__body {
   flex: 0 0 auto;
-  padding: 16px;
+  padding: 16px 5px 0;
 }
 
-.memory-card__body p {
-  color: var(--ink);
-  font-size: 0.96rem;
-  line-height: 1.55;
+.memory-card__message {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  width: 100%;
+  margin: 0;
+  padding: 16px;
+  color: #ffffff;
+  font-family: var(--handwritten);
+  font-size: 1.26rem;
+  font-weight: 600;
+  line-height: 1.18;
+  overflow: hidden;
+  text-align: left;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.54);
+  pointer-events: none;
+}
+
+.memory-card__message-text {
+  display: -webkit-box;
+  max-height: 3.54em;
+  overflow: hidden;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
   white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.memory-card__attribution {
+  min-height: 74px;
+  padding-top: 2px;
+}
+
+.memory-card__label {
+  display: block;
+  color: rgba(96, 116, 137, 0.72);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.2;
 }
 
 .memory-card__name {
   display: block;
-  margin-top: 12px;
-  color: var(--navy-700);
-  font-weight: 700;
+  margin-top: 4px;
+  color: var(--navy-800);
+  font-family: var(--script);
+  font-size: 2rem;
+  font-weight: 400;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
 }
 
 .archive-page {
@@ -1351,19 +1537,29 @@ h2 {
 }
 
 .archive-memory-card {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(23, 48, 74, 0.1);
-  border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: var(--soft-shadow);
+  padding: clamp(12px, 2vw, 18px) clamp(12px, 2vw, 18px) clamp(18px, 2.5vw, 24px);
+  border: 1px solid rgba(226, 218, 204, 0.86);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 24% 18%, rgba(255, 255, 255, 0.88) 0 1px, transparent 1px 4px),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(250, 247, 241, 0.96));
+  box-shadow:
+    0 10px 18px rgba(15, 34, 56, 0.12),
+    0 2px 6px rgba(15, 34, 56, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
   cursor: pointer;
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
 .archive-memory-card:hover,
 .archive-memory-card:focus-visible {
-  box-shadow: var(--shadow);
+  box-shadow:
+    0 14px 24px rgba(15, 34, 56, 0.15),
+    0 4px 10px rgba(15, 34, 56, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
   transform: translateY(-2px);
 }
 
@@ -1372,35 +1568,190 @@ h2 {
   outline-offset: 3px;
 }
 
-.archive-memory-card img {
+.archive-memory-card__image-frame {
+  position: relative;
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 7px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.74),
+    0 0 0 1px rgba(18, 34, 48, 0.1);
+  isolation: isolate;
+}
+
+.archive-memory-card__image-frame::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  height: 58%;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0));
+  content: "";
+  pointer-events: none;
+}
+
+.archive-memory-card__image {
+  display: block;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 
 .archive-memory-card__body {
-  padding: clamp(14px, 2.4vw, 20px);
+  flex: 0 0 auto;
+  padding: 16px 5px 0;
 }
 
-.archive-memory-card__body p {
-  margin-bottom: 12px;
-  color: var(--ink);
-  font-size: clamp(0.96rem, 2vw, 1.04rem);
-  line-height: 1.6;
+.archive-memory-card__message {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  width: 100%;
+  margin: 0;
+  padding: 16px;
+  color: #ffffff;
+  font-family: var(--handwritten);
+  font-size: 1.26rem;
+  font-weight: 600;
+  line-height: 1.18;
+  overflow: hidden;
+  text-align: left;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.54);
+  pointer-events: none;
+}
+
+.archive-memory-card__message-text {
+  display: -webkit-box;
+  max-height: 3.54em;
+  overflow: hidden;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
 }
 
-.archive-memory-card__body span {
+.archive-memory-card__attribution {
+  min-height: 74px;
+  padding-top: 2px;
+}
+
+.archive-memory-card__label {
   display: block;
-  color: var(--navy-700);
+  color: rgba(96, 116, 137, 0.72);
+  font-size: 0.68rem;
   font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.archive-memory-card__name {
+  display: block;
+  margin-top: 4px;
+  color: var(--navy-800);
+  font-family: var(--script);
+  font-size: 2rem;
+  font-weight: 400;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
 }
 
 .archive-actions {
   display: flex;
   justify-content: center;
   padding-top: 6px;
+}
+
+.admin-auth-page,
+.admin-wall-page {
+  min-height: 100svh;
+}
+
+.admin-auth-shell {
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  padding: max(32px, env(safe-area-inset-top)) 18px max(32px, env(safe-area-inset-bottom));
+}
+
+.admin-auth-card {
+  width: min(100%, 460px);
+  padding: clamp(24px, 6vw, 34px);
+  border: 1px solid rgba(226, 218, 204, 0.86);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(216, 228, 236, 0.56), transparent 18rem),
+    rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow);
+}
+
+.admin-auth-card h1 {
+  margin: 4px 0 10px;
+  color: var(--navy-900);
+  font-family: var(--serif);
+  font-size: clamp(2rem, 8vw, 3.2rem);
+  line-height: 1.05;
+}
+
+.admin-auth-copy {
+  margin: 0 0 24px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.admin-login-form {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-manager-page {
+  background:
+    radial-gradient(circle at 8% 4%, rgba(216, 228, 236, 0.72), transparent 28rem),
+    linear-gradient(180deg, #eef5f9 0%, #f8fafc 48%, #edf4f8 100%);
+}
+
+.admin-manager-shell {
+  width: min(1440px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: max(34px, calc(env(safe-area-inset-top) + 24px)) 0 max(54px, env(safe-area-inset-bottom));
+}
+
+.admin-manager-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.admin-manager-header h1 {
+  margin: 0;
+  color: var(--navy-900);
+  font-family: var(--serif);
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1;
+}
+
+.admin-memory-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(14px, 2vw, 20px);
+  align-items: start;
+}
+
+.admin-memory-card {
+  position: relative;
+}
+
+.admin-memory-grid .wall-status {
+  grid-column: 1 / -1;
 }
 
 .archive-actions .button[hidden] {
@@ -2030,26 +2381,32 @@ h2 {
   .memory-row {
     gap: 14px;
     padding-inline: 18px 28px;
-    padding-block: 10px 20px;
+    padding-block: 10px 22px;
     scroll-padding-inline: 18px;
   }
 
   .memory-card {
-    flex-basis: min(76vw, 318px);
+    flex-basis: min(76vw, 302px);
+    padding: 12px 12px 18px;
   }
 
   .memory-card__body {
-    padding: 13px;
+    padding: 14px 4px 0;
   }
 
-  .memory-card__body p {
-    font-size: 0.92rem;
-    line-height: 1.48;
+  .memory-card__message {
+    padding: 14px;
+    font-size: 1.16rem;
+    line-height: 1.18;
+  }
+
+  .memory-card__attribution {
+    min-height: 66px;
   }
 
   .memory-card__name {
-    margin-top: 9px;
-    font-size: 0.92rem;
+    margin-top: 3px;
+    font-size: 1.72rem;
   }
 
   .admin-stats {
@@ -2097,13 +2454,42 @@ h2 {
     gap: 14px;
   }
 
-  .archive-memory-card__body {
-    padding: 13px;
+  .admin-manager-shell {
+    width: min(100% - 24px, 680px);
+    padding-top: max(24px, calc(env(safe-area-inset-top) + 18px));
   }
 
-  .archive-memory-card__body p {
-    font-size: 0.92rem;
-    line-height: 1.48;
+  .admin-manager-header {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .admin-memory-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .admin-wall-toolbar {
+    margin-bottom: 14px;
+  }
+
+  .archive-memory-card__body {
+    padding: 14px 4px 0;
+  }
+
+  .archive-memory-card__message {
+    padding: 14px;
+    font-size: 1.16rem;
+    line-height: 1.18;
+  }
+
+  .archive-memory-card__attribution {
+    min-height: 66px;
+  }
+
+  .archive-memory-card__name {
+    margin-top: 3px;
+    font-size: 1.72rem;
   }
 
   .story-viewer {
@@ -2154,7 +2540,11 @@ h2 {
 
 @media (min-width: 560px) and (max-width: 920px) {
   .memory-card {
-    flex-basis: min(42vw, 340px);
+    flex-basis: min(42vw, 326px);
+  }
+
+  .admin-memory-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -2172,6 +2562,10 @@ h2 {
   }
 
   .archive-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-memory-grid {
     grid-template-columns: 1fr;
   }
 }

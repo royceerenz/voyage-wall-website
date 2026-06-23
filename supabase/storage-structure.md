@@ -25,16 +25,26 @@ event-assets/{eventId}/theme/{filename}
 event-assets/{eventId}/qr/{filename}
 ```
 
-### `memory-uploads`
+### Google Drive Originals
 
-Stores guest-submitted memory photos.
+Stores full-quality guest-submitted originals to reduce Supabase storage usage.
+
+Suggested folder:
+
+```text
+Voyage Wall Originals/
+```
+
+The memory row should save the Drive file reference in `original_image_url`.
+
+### `memory-photos`
+
+Stores optimized guest-submitted memory photos for public display.
 
 Suggested path pattern:
 
 ```text
-memory-uploads/{eventId}/{memoryId}/original.{ext}
-memory-uploads/{eventId}/{memoryId}/display.{ext}
-memory-uploads/{eventId}/{memoryId}/thumb.{ext}
+memory-photos/optimized/{filename}.{ext}
 ```
 
 ### `exports`
@@ -55,7 +65,7 @@ Recommended MVP approach:
 
 - Public Love Wall should display approved images.
 - Guest upload paths should not expose unnecessary private metadata.
-- Preferred MVP: keep `memory-uploads` private and serve approved images through signed URLs or an application-controlled URL strategy.
+- Preferred MVP: keep original images in the private Google Drive folder and serve optimized approved images through Supabase public URLs or signed URLs.
 - If using public buckets for simplicity, never treat obscure paths as the only protection. Database visibility rules still decide what appears.
 
 Final choice depends on implementation complexity and event privacy requirements.
@@ -81,6 +91,11 @@ Use:
 
 - Post-event downloads.
 - Future album/export features.
+
+Storage:
+
+- Google Drive.
+- Legacy Supabase original URLs remain supported for old records.
 
 ### Display
 
@@ -126,9 +141,9 @@ Open decisions:
 Start with:
 
 - `event-assets`
-- `memory-uploads`
-- Private `memory-uploads` bucket if feasible.
-- Display-sized image paths stored on the memory record.
+- Google Drive folder for originals.
+- Supabase `memory-photos/optimized/` for display images.
+- Optimized image paths stored on the memory record.
 
 Defer:
 
