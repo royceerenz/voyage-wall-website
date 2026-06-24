@@ -1,8 +1,15 @@
+require("dotenv").config({ path: require("path").join(__dirname, ".env"), quiet: true });
+
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const {
   downloadDriveFile,
+  exchangeOAuthCodeForTokens,
+  getGoogleOAuthDiagnostics,
+  getGoogleOAuthStartUrl,
+  getOAuthRedirectUri,
   parseDriveFileId,
   uploadOriginalImageToDrive
 } = require("./api/google-drive-utils.cjs");
@@ -41,6 +48,85 @@ function sendJson(response, statusCode, payload) {
   response.end(JSON.stringify(payload));
 }
 
+function testGoogleConnectivity() {
+  return new Promise((resolve) => {
+    const request = https.request("https://oauth2.googleapis.com/", {
+      method: "GET",
+      timeout: 10000
+    }, (googleResponse) => {
+      googleResponse.resume();
+      resolve({
+        reachable: true,
+        status: googleResponse.statusCode || 0,
+        error: ""
+      });
+    });
+
+    request.on("timeout", () => {
+      request.destroy(new Error("Request timed out."));
+    });
+
+    request.on("error", (error) => {
+      resolve({
+        reachable: false,
+        status: 0,
+        error: error.message || "Connection failed."
+      });
+    });
+
+    request.end();
+  });
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function sendRefreshTokenPage(response, refreshToken) {
+  response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+  response.end(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Voyage Wall Google OAuth</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 760px; margin: 48px auto; padding: 0 20px; line-height: 1.5; }
+      code { display: block; overflow-wrap: anywhere; white-space: pre-wrap; padding: 16px; border: 1px solid #ccd3df; border-radius: 8px; background: #f6f8fb; }
+    </style>
+  </head>
+  <body>
+    <h1>Google refresh token</h1>
+    <p>Copy this value into <strong>GOOGLE_REFRESH_TOKEN</strong> in your local environment and Vercel. Treat it like a password.</p>
+    <code>${escapeHtml(refreshToken)}</code>
+  </body>
+</html>`);
+}
+
+function getSafeTokenExchangeDiagnostics(error, request, code) {
+  return {
+    redirectUri: error.redirectUri || getOAuthRedirectUri(request),
+    googleError: {
+      message: error.googleOAuth?.message || "",
+      status: error.googleOAuth?.status || "",
+      error: error.googleOAuth?.error || "",
+      error_description: error.googleOAuth?.error_description || ""
+    },
+    requestFields: error.googleOAuth?.requestFields || {
+      code: code ? "PRESENT" : "MISSING",
+      client_id: process.env.GOOGLE_CLIENT_ID ? "PRESENT" : "MISSING",
+      client_secret: process.env.GOOGLE_CLIENT_SECRET ? "PRESENT" : "MISSING",
+      redirect_uri: getOAuthRedirectUri(request) ? "PRESENT" : "MISSING",
+      grant_type: "authorization_code"
+    }
+  };
+}
+
 const server = http.createServer(async (request, response) => {
   const requestUrl = new URL(request.url, "http://localhost");
   const urlPath = decodeURIComponent(requestUrl.pathname);
@@ -72,6 +158,98 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, isValid ? 200 : 401, { ok: isValid });
     } catch {
       sendJson(response, 400, { ok: false });
+    }
+    return;
+  }
+
+  if (urlPath === "/api/google-connectivity-test") {
+    if (request.method !== "GET") {
+      response.writeHead(405, {
+        "Allow": "GET",
+        "Content-Type": "application/json; charset=utf-8"
+      });
+      response.end(JSON.stringify({ ok: false }));
+      return;
+    }
+
+    const result = await testGoogleConnectivity();
+    sendJson(response, 200, {
+      reachable: result.reachable ? "reachable" : "unreachable",
+      error: result.error || ""
+    });
+    return;
+  }
+
+  if (urlPath === "/api/google-oauth-start") {
+    if (request.method !== "GET") {
+      response.writeHead(405, {
+        "Allow": "GET",
+        "Content-Type": "application/json; charset=utf-8"
+      });
+      response.end(JSON.stringify({ ok: false }));
+      return;
+    }
+
+    try {
+      response.writeHead(302, {
+        Location: getGoogleOAuthStartUrl(request)
+      });
+      response.end();
+    } catch (error) {
+      console.error("[Voyage Wall] Google OAuth start failed.", error);
+      sendJson(response, 500, {
+        ok: false,
+        error: "Google OAuth is not configured.",
+        diagnostics: getGoogleOAuthDiagnostics(request)
+      });
+    }
+    return;
+  }
+
+  if (urlPath === "/api/google-oauth-callback") {
+    if (request.method !== "GET") {
+      response.writeHead(405, {
+        "Allow": "GET",
+        "Content-Type": "application/json; charset=utf-8"
+      });
+      response.end(JSON.stringify({ ok: false }));
+      return;
+    }
+
+    const code = requestUrl.searchParams.get("code");
+    if (!code) {
+      sendJson(response, 400, { ok: false, error: "Missing OAuth code." });
+      return;
+    }
+
+    try {
+      const tokens = await exchangeOAuthCodeForTokens({
+        code,
+        redirectUri: getOAuthRedirectUri(request)
+      });
+
+      if (!tokens.refresh_token) {
+        response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        response.end(`<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Voyage Wall Google OAuth</title></head>
+  <body>
+    <h1>No refresh token returned</h1>
+    <p>Try the setup link again. The OAuth request uses offline access and consent prompt, but Google may skip a refresh token if access was already granted.</p>
+  </body>
+</html>`);
+        return;
+      }
+
+      sendRefreshTokenPage(response, tokens.refresh_token);
+    } catch (error) {
+      const diagnostics = getSafeTokenExchangeDiagnostics(error, request, code);
+      console.error("[Voyage Wall] Google OAuth callback failed.", diagnostics);
+      sendJson(response, 500, {
+        ok: false,
+        error: "Google OAuth token exchange failed.",
+        diagnostics
+      });
     }
     return;
   }

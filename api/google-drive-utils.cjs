@@ -1,59 +1,107 @@
 const crypto = require("crypto");
+const { OAuth2Client } = require("google-auth-library");
 
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const DRIVE_UPLOAD_URL =
   "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,webContentLink";
 
 let cachedToken = null;
 
-function base64Url(input) {
-  return Buffer.from(input)
-    .toString("base64")
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
-}
-
-function normalizePrivateKey(privateKey) {
-  return privateKey.replace(/\\n/g, "\n");
-}
-
 function getGoogleConfig() {
-  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
 
-  if (!clientEmail || !privateKey || !folderId) {
+  if (!clientId || !clientSecret || !folderId) {
     throw new Error("Google Drive upload is not configured.");
   }
 
   return {
-    clientEmail,
-    privateKey: normalizePrivateKey(privateKey),
+    clientId,
+    clientSecret,
     folderId
   };
 }
 
-function createServiceAccountJwt() {
-  const { clientEmail, privateKey } = getGoogleConfig();
-  const now = Math.floor(Date.now() / 1000);
-  const header = {
-    alg: "RS256",
-    typ: "JWT"
+function getOAuthConfig() {
+  const config = getGoogleConfig();
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+
+  if (!refreshToken) {
+    throw new Error("Google OAuth refresh token is not configured.");
+  }
+
+  return {
+    ...config,
+    refreshToken
   };
-  const claimSet = {
-    iss: clientEmail,
+}
+
+function getBaseUrl(request) {
+  const host = request.headers?.["x-forwarded-host"] || request.headers?.host;
+  const protocol = request.headers?.["x-forwarded-proto"] || "http";
+
+  if (!host) {
+    return "http://127.0.0.1:4173";
+  }
+
+  return `${protocol}://${host}`;
+}
+
+function getOAuthRedirectUri(request) {
+  return process.env.GOOGLE_OAUTH_REDIRECT_URI || `${getBaseUrl(request)}/api/google-oauth-callback`;
+}
+
+function getGoogleOAuthDiagnostics(request) {
+  return {
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ? "PRESENT" : "MISSING",
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ? "PRESENT" : "MISSING",
+    redirectUri: getOAuthRedirectUri(request)
+  };
+}
+
+function getGoogleOAuthStartUrl(request) {
+  const { clientId } = getGoogleConfig();
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: getOAuthRedirectUri(request),
+    response_type: "code",
     scope: DRIVE_SCOPE,
-    aud: TOKEN_URL,
-    exp: now + 3600,
-    iat: now
+    access_type: "offline",
+    prompt: "consent"
+  });
+
+  return `${AUTH_URL}?${params.toString()}`;
+}
+
+async function exchangeOAuthCodeForTokens({ code, redirectUri }) {
+  const { clientId, clientSecret } = getGoogleConfig();
+  const requestFields = {
+    code: code ? "PRESENT" : "MISSING",
+    client_id: clientId ? "PRESENT" : "MISSING",
+    client_secret: clientSecret ? "PRESENT" : "MISSING",
+    redirect_uri: redirectUri ? "PRESENT" : "MISSING",
+    grant_type: "authorization_code"
   };
-  const unsignedJwt = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(claimSet))}`;
-  const signer = crypto.createSign("RSA-SHA256");
-  signer.update(unsignedJwt);
-  signer.end();
-  return `${unsignedJwt}.${base64Url(signer.sign(privateKey))}`;
+
+  try {
+    const oauth2Client = new OAuth2Client(clientId, clientSecret, redirectUri);
+    const { tokens } = await oauth2Client.getToken(code);
+    return tokens;
+  } catch (tokenError) {
+    const error = new Error("Google OAuth token exchange failed.");
+    error.googleOAuth = {
+      message: tokenError.message || "",
+      status: tokenError.response?.status || "",
+      error: tokenError.response?.data?.error || "",
+      error_description: tokenError.response?.data?.error_description || "",
+      requestFields
+    };
+    error.redirectUri = redirectUri;
+    throw error;
+  }
 }
 
 async function getAccessToken() {
@@ -61,23 +109,26 @@ async function getAccessToken() {
     return cachedToken.value;
   }
 
-  const assertion = createServiceAccountJwt();
+  const { clientId, clientSecret, refreshToken } = getOAuthConfig();
   const response = await fetch(TOKEN_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded"
     },
     body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token"
     })
   });
 
+  const token = await response.json().catch(() => ({}));
+
   if (!response.ok) {
-    throw new Error(`Google auth failed with status ${response.status}`);
+    throw new Error(`Google OAuth refresh failed with status ${response.status}`);
   }
 
-  const token = await response.json();
   cachedToken = {
     value: token.access_token,
     expiresAt: Date.now() + Number(token.expires_in || 3600) * 1000
@@ -173,6 +224,10 @@ async function downloadDriveFile(fileId) {
 
 module.exports = {
   downloadDriveFile,
+  exchangeOAuthCodeForTokens,
+  getGoogleOAuthDiagnostics,
+  getGoogleOAuthStartUrl,
+  getOAuthRedirectUri,
   parseDriveFileId,
   uploadOriginalImageToDrive
 };
