@@ -50,6 +50,50 @@ const MEMORY_SELECT_FIELDS_WITHOUT_IMAGE_URL = "id, photo_url, original_image_ur
 const LEGACY_MEMORY_SELECT_FIELDS = "id, photo_url, message, name, anonymous, created_at";
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const isAdminMode = false;
+const SAMPLE_MEMORIES = [
+  {
+    id: "sample-memory-toast",
+    image: "./assets/mockups/memory-toast.png",
+    photo_url: "./assets/mockups/memory-toast.png",
+    original_image_url: "./assets/mockups/memory-toast.png",
+    optimized_image_url: "./assets/mockups/memory-toast.png",
+    image_url: "./assets/mockups/memory-toast.png",
+    downloadImage: "./assets/mockups/memory-toast.png",
+    message: "To a lifetime of soft mornings, bright horizons, and always choosing each other.",
+    name: "Mara",
+    anonymous: false,
+    created_at: "2026-06-27T00:00:00.000Z",
+    isSample: true
+  },
+  {
+    id: "sample-memory-rings",
+    image: "./assets/mockups/memory-rings.png",
+    photo_url: "./assets/mockups/memory-rings.png",
+    original_image_url: "./assets/mockups/memory-rings.png",
+    optimized_image_url: "./assets/mockups/memory-rings.png",
+    image_url: "./assets/mockups/memory-rings.png",
+    downloadImage: "./assets/mockups/memory-rings.png",
+    message: "The most beautiful yes, sealed by the sea and everyone who loves you.",
+    name: "Nico",
+    anonymous: false,
+    created_at: "2026-06-27T00:01:00.000Z",
+    isSample: true
+  },
+  {
+    id: "sample-memory-dance",
+    image: "./assets/mockups/memory-dance.png",
+    photo_url: "./assets/mockups/memory-dance.png",
+    original_image_url: "./assets/mockups/memory-dance.png",
+    optimized_image_url: "./assets/mockups/memory-dance.png",
+    image_url: "./assets/mockups/memory-dance.png",
+    downloadImage: "./assets/mockups/memory-dance.png",
+    message: "May every tide bring you back to laughter, dancing, and home.",
+    name: "A guest",
+    anonymous: true,
+    created_at: "2026-06-27T00:02:00.000Z",
+    isSample: true
+  }
+];
 
 messageInput.maxLength = MESSAGE_LIMIT;
 
@@ -64,9 +108,23 @@ let sourceSelectionPending = false;
 let galleryAutoplayFrame = null;
 let galleryResumeTimer = null;
 let galleryAutoplayStartedAt = 0;
+let floatingWallResizeTimer = null;
 const selectedMemoryIds = new Set();
-const GALLERY_AUTOPLAY_SPEED = 0.45;
-const GALLERY_RESUME_RAMP_MS = 900;
+const FLOATING_WALL_LIMITS = {
+  desktop: 24,
+  tablet: 16,
+  mobile: 8
+};
+const FLOATING_WALL_CARD_GAP = 22;
+const FLOATING_WALL_SPEED = {
+  min: 0.18,
+  max: 0.38
+};
+const FLOATING_WALL_ROTATION = {
+  desktop: 8,
+  tablet: 8,
+  mobile: 3
+};
 
 if (isAdminMode) {
   document.body.classList.add("is-admin-wall");
@@ -122,7 +180,7 @@ function updateHeroMemoryCounter() {
 
 function mapSupabaseMemory(row) {
   const displayName = row.anonymous ? "A guest" : row.name || "A guest";
-  const displayImage = row.optimized_image_url || row.image_url || row.photo_url || FALLBACK_MEMORY_IMAGE;
+  const displayImage = row.optimized_image_url || row.photo_url || row.image_url || FALLBACK_MEMORY_IMAGE;
   const originalImage = row.original_image_url || row.optimized_image_url || row.image_url || row.photo_url || FALLBACK_MEMORY_IMAGE;
 
   return {
@@ -536,15 +594,26 @@ async function loadMemories() {
       throw new Error(error.message || "Could not load memories.");
     }
 
-    totalMemoryCount = count || 0;
     memories = (data || []).map(mapSupabaseMemory);
+    if (memories.length === 0 && !isAdminMode) {
+      memories = SAMPLE_MEMORIES;
+      totalMemoryCount = SAMPLE_MEMORIES.length;
+    } else {
+      totalMemoryCount = count || memories.length;
+    }
     renderMemories();
   } catch (error) {
-    memoryGrid.innerHTML = `
-      <p class="wall-status wall-status--error">
-        We could not load the Love Wall yet. Please refresh and try again.
-      </p>
-    `;
+    if (!isAdminMode) {
+      memories = SAMPLE_MEMORIES;
+      totalMemoryCount = SAMPLE_MEMORIES.length;
+      renderMemories();
+    } else {
+      memoryGrid.innerHTML = `
+        <p class="wall-status wall-status--error">
+          We could not load the Love Wall yet. Please refresh and try again.
+        </p>
+      `;
+    }
     console.error(error);
   }
 }
@@ -553,6 +622,7 @@ function renderMemories() {
   memoryGrid.innerHTML = "";
   updateHeroMemoryCounter();
   createAdminToolbar();
+  stopGalleryAutoplay();
   selectedMemoryIds.forEach((memoryId) => {
     if (!memories.some((memory) => memory.id === memoryId)) {
       selectedMemoryIds.delete(memoryId);
@@ -561,112 +631,13 @@ function renderMemories() {
 
   if (memories.length === 0) {
     memoryGrid.innerHTML = '<p class="wall-status">No memories have been shared yet.</p>';
-    stopGalleryAutoplay();
     updateAdminSelectionUi();
     return;
   }
 
-  const shouldUseFullCarousel = memories.length > 4;
-  const shouldLoopRows = memories.length > 1;
-  const memoryRows = shouldUseFullCarousel
-    ? [
-        {
-          className: "memory-row memory-row--primary",
-          direction: "1",
-          memories: memories.filter((_, index) => index % 2 === 0)
-        },
-        {
-          className: "memory-row memory-row--secondary",
-          direction: "-1",
-          memories: memories.filter((_, index) => index % 2 === 1)
-        }
-      ]
-    : [
-        {
-          className: "memory-row memory-row--preview",
-          direction: "1",
-          memories
-        }
-      ];
-
-  const appendMemoryCard = (row, memory, index, isClone = false) => {
-    const card = document.createElement("article");
-    card.className = `memory-card${memory.id === highlightedMemoryId ? " is-new" : ""}`;
-    card.dataset.memoryId = memory.id;
-    card.tabIndex = -1;
-    if (isClone) {
-      card.dataset.clone = "true";
-    }
-    card.style.setProperty("--card-reveal-delay", `${Math.min(index * 70, 280)}ms`);
-    if (revealedMemoryIds.has(memory.id)) {
-      card.classList.add("is-visible");
-    }
-    const displayMessage = String(memory.message || "").slice(0, MESSAGE_LIMIT);
-    card.innerHTML = `
-      <div class="memory-card__image-frame">
-        <img class="memory-card__image" src="${memory.image}" alt="Wedding memory shared by ${escapeHtml(memory.name)}" loading="lazy" decoding="async">
-        <p class="memory-card__message">
-          <span class="memory-card__message-text">${escapeHtml(displayMessage)}</span>
-        </p>
-      </div>
-      <div class="memory-card__body">
-        <div class="memory-card__attribution">
-          <span class="memory-card__label">FROM:</span>
-          <span class="memory-card__name">${escapeHtml(memory.name)}</span>
-        </div>
-      </div>
-    `;
-    if (isAdminMode) {
-      const selectLabel = document.createElement("label");
-      selectLabel.className = "memory-card__select";
-      selectLabel.setAttribute("aria-label", `Select memory shared by ${memory.name}`);
-      selectLabel.innerHTML = `
-        <input class="memory-card__select-input" type="checkbox" value="${escapeHtml(memory.id)}">
-        <span class="memory-card__select-box" aria-hidden="true"></span>
-      `;
-      selectLabel.addEventListener("pointerdown", (event) => {
-        event.stopPropagation();
-      });
-      selectLabel.addEventListener("click", (event) => {
-        event.stopPropagation();
-      });
-      selectLabel.querySelector("input").addEventListener("change", (event) => {
-        event.stopPropagation();
-        toggleSelect(memory.id);
-      });
-      card.prepend(selectLabel);
-    }
-    card.querySelector("img").addEventListener("error", (event) => {
-      event.currentTarget.src = FALLBACK_MEMORY_IMAGE;
-    }, { once: true });
-    row.append(card);
-  };
-
-  const rows = memoryRows.map((rowConfig) => {
-    const row = document.createElement("div");
-    row.className = rowConfig.className;
-    row.dataset.direction = rowConfig.direction;
-    memoryGrid.append(row);
-    rowConfig.memories.forEach((memory, index) => appendMemoryCard(row, memory, index));
-    return { element: row, memories: rowConfig.memories };
-  });
-
-  if (shouldLoopRows) {
-    [1, 2].forEach(() => {
-      rows.forEach(({ element, memories: rowMemories }) => {
-        rowMemories.forEach((memory, index) => appendMemoryCard(element, memory, index, true));
-      });
-    });
-  }
-
-  requestAnimationFrame(() => {
-    rows.forEach(({ element }, index) => {
-      const isReverseRow = element.dataset.direction === "-1";
-      const loopWidth = getRowLoopWidth(element);
-      element.scrollLeft = shouldLoopRows && isReverseRow ? loopWidth : 0;
-      element.dataset.scrollPosition = String(element.scrollLeft);
-    });
-  });
+  memoryGrid.classList.add("memory-grid--floating");
+  memoryGrid.append(createFloatingWallCanvas());
+  fillFloatingWall();
   observeMemoryCards();
   scheduleGalleryAutoplay(700);
   updateAdminSelectionUi();
@@ -681,6 +652,382 @@ function renderMemories() {
   }
 }
 
+function createMemoryCard(memory, index = 0, isClone = false) {
+  const card = document.createElement("article");
+  card.className = `memory-card${memory.id === highlightedMemoryId ? " is-new" : ""}`;
+  card.dataset.memoryId = memory.id;
+  card.tabIndex = -1;
+  if (isClone) {
+    card.dataset.clone = "true";
+  }
+  card.style.setProperty("--card-reveal-delay", `${Math.min(index * 70, 280)}ms`);
+  if (revealedMemoryIds.has(memory.id)) {
+    card.classList.add("is-visible");
+  }
+  const displayMessage = String(memory.message || "").slice(0, MESSAGE_LIMIT);
+  card.innerHTML = `
+    <div class="memory-card__image-frame">
+      <img class="memory-card__image" src="${memory.image}" alt="Wedding memory shared by ${escapeHtml(memory.name)}" loading="lazy" decoding="async">
+    </div>
+    <div class="memory-card__body">
+      <p class="memory-card__message">
+        <span class="memory-card__message-text">${escapeHtml(displayMessage)}</span>
+      </p>
+      <div class="memory-card__attribution">
+        <span class="memory-card__label">FROM:</span>
+        <span class="memory-card__name">${escapeHtml(memory.name)}</span>
+      </div>
+    </div>
+  `;
+  if (isAdminMode) {
+    const selectLabel = document.createElement("label");
+    selectLabel.className = "memory-card__select";
+    selectLabel.setAttribute("aria-label", `Select memory shared by ${memory.name}`);
+    selectLabel.innerHTML = `
+      <input class="memory-card__select-input" type="checkbox" value="${escapeHtml(memory.id)}">
+      <span class="memory-card__select-box" aria-hidden="true"></span>
+    `;
+    selectLabel.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+    });
+    selectLabel.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+    selectLabel.querySelector("input").addEventListener("change", (event) => {
+      event.stopPropagation();
+      toggleSelect(memory.id);
+    });
+    card.prepend(selectLabel);
+  }
+  card.querySelector("img").addEventListener("error", (event) => {
+    event.currentTarget.src = FALLBACK_MEMORY_IMAGE;
+  }, { once: true });
+  return card;
+}
+
+function createFloatingWallCanvas() {
+  const canvas = document.createElement("div");
+  canvas.className = "floating-memory-wall";
+  canvas.setAttribute("aria-label", "Floating shared memories");
+  return canvas;
+}
+
+function getFloatingWallCanvas() {
+  return memoryGrid.querySelector(".floating-memory-wall");
+}
+
+function getFloatingWallLimit() {
+  if (window.matchMedia("(max-width: 559px)").matches) return FLOATING_WALL_LIMITS.mobile;
+  if (window.matchMedia("(max-width: 920px)").matches) return FLOATING_WALL_LIMITS.tablet;
+  return FLOATING_WALL_LIMITS.desktop;
+}
+
+function getFloatingWallMode() {
+  if (window.matchMedia("(max-width: 559px)").matches) return "mobile";
+  if (window.matchMedia("(max-width: 920px)").matches) return "tablet";
+  return "desktop";
+}
+
+function getFloatingWallSpacing() {
+  const mode = getFloatingWallMode();
+  if (mode === "mobile") {
+    return {
+      x: 14,
+      y: 34
+    };
+  }
+  if (mode === "tablet") {
+    return {
+      x: 30,
+      y: 42
+    };
+  }
+  return {
+    x: 44,
+    y: 48
+  };
+}
+
+function getFloatingWallCapacity(canvas) {
+  if (!canvas || memories.length === 0) return 0;
+
+  const probe = document.createElement("div");
+  probe.className = "floating-memory-wall__item floating-memory-wall__item--probe";
+  probe.append(createMemoryCard(memories[0], 0, true));
+  canvas.append(probe);
+  const { slots } = buildFloatingSlots(canvas, probe);
+  probe.remove();
+  return Math.max(1, slots.length);
+}
+
+function getFloatingDisplayList(displayCount) {
+  return Array.from({ length: displayCount }, (_, index) => ({
+    memory: memories[index % memories.length],
+    isClone: index >= memories.length
+  }));
+}
+
+function fillFloatingWall() {
+  const canvas = getFloatingWallCanvas();
+  if (!canvas) return;
+
+  const probe = document.createElement("div");
+  probe.className = "floating-memory-wall__item floating-memory-wall__item--probe";
+  probe.append(createMemoryCard(memories[0], 0, true));
+  canvas.append(probe);
+  const { slots } = buildFloatingSlots(canvas, probe);
+  probe.remove();
+
+  const shuffledSlots = shuffleItems(slots);
+  const displayLimit = Math.min(getFloatingWallLimit(), Math.max(1, shuffledSlots.length));
+  const displayCount = Math.max(1, displayLimit);
+  const displayList = getFloatingDisplayList(displayCount);
+  displayList.forEach(({ memory, isClone }, index) => {
+    appendFloatingMemory(memory, {
+      index,
+      total: displayCount,
+      slot: shuffledSlots[index],
+      isClone,
+      startBelow: false
+    });
+  });
+}
+
+function randomBetween(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+function shuffleItems(items) {
+  const shuffled = [...items];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
+function getFloatingItemBounds(item) {
+  const card = item.querySelector(".memory-card");
+  const cardRect = card?.getBoundingClientRect();
+  const width = cardRect?.width || item.getBoundingClientRect().width || 302;
+  const height = cardRect?.height || item.getBoundingClientRect().height || 410;
+  return {
+    width,
+    height
+  };
+}
+
+function getFloatingSafeArea(canvas, item) {
+  const canvasRect = canvas.getBoundingClientRect();
+  const { width: cardWidth, height: cardHeight } = getFloatingItemBounds(item);
+  const mode = getFloatingWallMode();
+  const sideMargin = mode === "mobile"
+    ? Math.max(18, Math.min(28, canvasRect.width * 0.05))
+    : Math.max(36, Math.min(64, canvasRect.width * 0.055));
+  const topMargin = mode === "mobile" ? 320 : 158;
+  const bottomMargin = mode === "mobile" ? 132 : 118;
+
+  return {
+    canvasRect,
+    cardWidth,
+    cardHeight,
+    minX: sideMargin,
+    maxX: Math.max(sideMargin, canvasRect.width - cardWidth - sideMargin),
+    minY: topMargin,
+    maxY: Math.max(topMargin, canvasRect.height - cardHeight - bottomMargin)
+  };
+}
+
+function buildFloatingSlots(canvas, item) {
+  const safeArea = getFloatingSafeArea(canvas, item);
+  const spacing = getFloatingWallSpacing();
+  const mode = getFloatingWallMode();
+  const cellWidth = safeArea.cardWidth + spacing.x;
+  const cellHeight = safeArea.cardHeight + spacing.y;
+  const availableWidth = Math.max(0, safeArea.maxX - safeArea.minX);
+  const availableHeight = Math.max(cellHeight, safeArea.maxY - safeArea.minY + safeArea.cardHeight);
+  const possibleColumnCount = Math.max(1, Math.floor((availableWidth + spacing.x) / cellWidth) + 1);
+  const columnCount = mode === "mobile"
+    ? Math.min(2, possibleColumnCount)
+    : Math.min(mode === "tablet" ? 3 : 5, possibleColumnCount);
+  const rowCount = Math.max(1, Math.floor(availableHeight / cellHeight));
+  const usableX = Math.max(0, safeArea.maxX - safeArea.minX);
+  const usableY = Math.max(0, safeArea.maxY - safeArea.minY);
+  const slots = [];
+
+  for (let row = 0; row < rowCount; row += 1) {
+    for (let column = 0; column < columnCount; column += 1) {
+      const columnRatio = columnCount === 1 ? 0.5 : column / (columnCount - 1);
+      const rowRatio = rowCount === 1 ? 0.5 : row / (rowCount - 1);
+      slots.push({
+        column,
+        row,
+        x: safeArea.minX + usableX * columnRatio,
+        y: safeArea.minY + usableY * rowRatio
+      });
+    }
+  }
+
+  return {
+    slots: shuffleItems(slots),
+    safeArea,
+    spacing
+  };
+}
+
+function rectsOverlap(firstRect, secondRect) {
+  return !(
+    firstRect.right < secondRect.left ||
+    firstRect.left > secondRect.right ||
+    firstRect.bottom < secondRect.top ||
+    firstRect.top > secondRect.bottom
+  );
+}
+
+function getPlacedFloatingRects(excludedItem) {
+  const canvas = getFloatingWallCanvas();
+  if (!canvas) return [];
+
+  return Array.from(canvas.querySelectorAll(".floating-memory-wall__item"))
+    .filter((item) => item !== excludedItem)
+    .map((item) => {
+      const x = Number(item.dataset.x);
+      const y = Number(item.dataset.y);
+      const { width, height } = getFloatingItemBounds(item);
+      return {
+        left: x,
+        top: y,
+        right: x + width,
+        bottom: y + height
+      };
+    })
+    .filter((rect) => Number.isFinite(rect.left) && Number.isFinite(rect.top));
+}
+
+function chooseFloatingPosition(item, options = {}) {
+  const canvas = getFloatingWallCanvas();
+  if (!canvas) return { x: 0, y: 0 };
+
+  const { slots, safeArea, spacing } = buildFloatingSlots(canvas, item);
+  const index = Number(item.dataset.floatIndex || 0);
+  const mode = getFloatingWallMode();
+  const orderedSlots = slots.length ? slots : [{ column: 0, row: 0, x: safeArea.minX, y: safeArea.minY }];
+  const jitterX = mode === "mobile" ? 0 : spacing.x * 0.52;
+  const jitterY = mode === "mobile" ? spacing.y * 0.82 : spacing.y * 0.46;
+
+  if (!options.startBelow && options.slot) {
+    const x = Math.max(
+      safeArea.minX,
+      Math.min(safeArea.maxX, options.slot.x + randomBetween(-jitterX, jitterX))
+    );
+    const y = Math.max(
+      safeArea.minY,
+      Math.min(safeArea.maxY, options.slot.y + randomBetween(-jitterY, jitterY))
+    );
+    return {
+      x,
+      y,
+      column: options.slot.column
+    };
+  }
+
+  if (options.startBelow) {
+    const preferredColumn = Number(item.dataset.floatColumn);
+    const columnSlots = Number.isFinite(preferredColumn)
+      ? orderedSlots.filter((slot) => slot.column === preferredColumn)
+      : [];
+    const candidateSlot = shuffleItems(columnSlots.length ? columnSlots : orderedSlots)[0];
+    const columnItems = Array.from(canvas.querySelectorAll(".floating-memory-wall__item"))
+      .filter((otherItem) => otherItem !== item && Number(otherItem.dataset.floatColumn) === candidateSlot.column);
+    const columnBottom = columnItems.reduce((bottom, otherItem) => {
+      const y = Number(otherItem.dataset.y);
+      if (!Number.isFinite(y)) return bottom;
+      const { height } = getFloatingItemBounds(otherItem);
+      return Math.max(bottom, y + height);
+    }, safeArea.canvasRect.height);
+    const x = Math.max(
+      safeArea.minX,
+      Math.min(safeArea.maxX, candidateSlot.x + randomBetween(-jitterX, jitterX))
+    );
+    const belowY = Math.max(
+      safeArea.canvasRect.height + randomBetween(spacing.y * 0.6, spacing.y * 1.25),
+      columnBottom + spacing.y + randomBetween(0, jitterY)
+    );
+    return {
+      x,
+      y: belowY,
+      column: candidateSlot.column
+    };
+  }
+
+  for (let attempt = 0; attempt < orderedSlots.length; attempt += 1) {
+    const slot = orderedSlots[(index + attempt) % orderedSlots.length];
+    const x = Math.max(safeArea.minX, Math.min(safeArea.maxX, slot.x + randomBetween(-jitterX, jitterX)));
+    const y = Math.max(safeArea.minY, Math.min(safeArea.maxY, slot.y + randomBetween(-jitterY, jitterY)));
+    const candidateRect = {
+      left: x,
+      top: y,
+      right: x + safeArea.cardWidth,
+      bottom: y + safeArea.cardHeight
+    };
+
+    if (!getPlacedFloatingRects(item).some((rect) => rectsOverlap(candidateRect, rect))) {
+      return {
+        x,
+        y,
+        column: slot.column
+      };
+    }
+  }
+
+  const fallbackSlot = orderedSlots[index % orderedSlots.length];
+
+  return {
+    x: Math.max(safeArea.minX, Math.min(safeArea.maxX, fallbackSlot.x)),
+    y: Math.max(safeArea.minY, Math.min(safeArea.maxY, fallbackSlot.y)),
+    column: fallbackSlot.column
+  };
+}
+
+function applyFloatingPlacement(item, options = {}) {
+  const canvas = getFloatingWallCanvas();
+  if (!canvas) return;
+
+  const mode = getFloatingWallMode();
+  const { x, y, column } = chooseFloatingPosition(item, options);
+  const rotationLimit = FLOATING_WALL_ROTATION[mode];
+  const rotation = randomBetween(-rotationLimit, rotationLimit);
+  const speed = randomBetween(FLOATING_WALL_SPEED.min, FLOATING_WALL_SPEED.max);
+
+  item.dataset.x = String(x);
+  item.dataset.y = String(y);
+  item.dataset.floatColumn = String(column);
+  item.dataset.rotation = String(rotation);
+  item.dataset.speed = String(speed);
+  item.style.transform = `translate3d(${x}px, ${y}px, 0) rotate(${rotation}deg)`;
+}
+
+function appendFloatingMemory(memory, options = {}) {
+  const canvas = getFloatingWallCanvas();
+  if (!canvas) return null;
+
+  const item = document.createElement("div");
+  item.className = "floating-memory-wall__item";
+  item.dataset.memoryId = memory.id;
+  item.dataset.floatIndex = String(options.index || 0);
+  item.dataset.floatTotal = String(options.total || getFloatingWallLimit());
+  if (options.isClone) {
+    item.dataset.clone = "true";
+  }
+  item.append(createMemoryCard(memory, options.index || 0, options.isClone));
+  canvas.append(item);
+  applyFloatingPlacement(item, {
+    slot: options.slot,
+    startBelow: options.startBelow
+  });
+  return item;
+}
+
 function addMemoryToWall(memory) {
   if (memories.some((existingMemory) => existingMemory.id === memory.id)) return;
 
@@ -689,11 +1036,37 @@ function addMemoryToWall(memory) {
   memories = memories.slice(0, HOMEPAGE_MEMORY_PREVIEW_LIMIT);
   highlightedMemoryId = memory.id;
   revealedMemoryIds.delete(memory.id);
-  renderMemories();
+  updateHeroMemoryCounter();
+
+  const canvas = getFloatingWallCanvas();
+  if (!canvas || memories.length === 1) {
+    renderMemories();
+    return;
+  }
+
+  const visibleLimit = Math.min(getFloatingWallLimit(), getFloatingWallCapacity(canvas));
+  const visibleItems = canvas.querySelectorAll(".floating-memory-wall__item");
+  if (visibleItems.length >= visibleLimit) {
+    visibleItems[visibleItems.length - 1].remove();
+  }
+  const item = appendFloatingMemory(memory, {
+    index: 0,
+    total: visibleLimit,
+    startBelow: true
+  });
+  item?.querySelector(".memory-card")?.classList.add("is-visible");
+  updateAdminSelectionUi();
+
+  window.setTimeout(() => {
+    highlightedMemoryId = null;
+    document.querySelectorAll(".memory-card.is-new").forEach((card) => {
+      card.classList.remove("is-new");
+    });
+  }, 2000);
 }
 
 function canAutoplayGallery() {
-  return !reduceMotionQuery.matches && memoryGrid.querySelectorAll('.memory-card:not([data-clone="true"])').length > 1;
+  return !reduceMotionQuery.matches && memoryGrid.querySelectorAll(".floating-memory-wall__item").length > 1;
 }
 
 function stopGalleryAutoplay() {
@@ -707,9 +1080,7 @@ function stopGalleryAutoplay() {
     galleryResumeTimer = null;
   }
 
-  memoryGrid.querySelectorAll(".memory-row.is-autoplaying").forEach((row) => {
-    row.classList.remove("is-autoplaying");
-  });
+  memoryGrid.querySelector(".floating-memory-wall")?.classList.remove("is-floating");
 }
 
 function runGalleryAutoplay() {
@@ -718,41 +1089,68 @@ function runGalleryAutoplay() {
     return;
   }
 
-  const rows = Array.from(memoryGrid.querySelectorAll(".memory-row"));
-  if (!rows.some((row) => row.scrollWidth - row.clientWidth > 24)) {
+  const canvas = getFloatingWallCanvas();
+  if (!canvas) {
     galleryAutoplayFrame = null;
     return;
   }
 
-  rows.forEach((row) => {
-    const loopWidth = getRowLoopWidth(row);
-    if (loopWidth <= row.clientWidth + 24) return;
+  canvas.classList.add("is-floating");
+  const elapsed = performance.now() - galleryAutoplayStartedAt;
+  const speedRamp = Math.min(1, Math.max(0.24, elapsed / 1200));
 
-    const direction = Number(row.dataset.direction || "1");
-    let scrollPosition = Number(row.dataset.scrollPosition || row.scrollLeft);
-    const elapsed = performance.now() - galleryAutoplayStartedAt;
-    const speedRamp = Math.min(1, Math.max(0.18, elapsed / GALLERY_RESUME_RAMP_MS));
-    const frameSpeed = GALLERY_AUTOPLAY_SPEED * speedRamp;
-    row.classList.add("is-autoplaying");
-    scrollPosition += frameSpeed * direction;
+  const movingItems = Array.from(canvas.querySelectorAll(".floating-memory-wall__item"));
+  movingItems.forEach((item) => {
+    let y = Number(item.dataset.y || 0);
+    const x = Number(item.dataset.x || 0);
+    const rotation = Number(item.dataset.rotation || 0);
+    const speed = Number(item.dataset.speed || FLOATING_WALL_SPEED.min) * speedRamp;
+    const cardHeight = item.querySelector(".memory-card")?.getBoundingClientRect().height || 410;
+    y -= speed;
 
-    if (direction > 0 && scrollPosition >= loopWidth) {
-      scrollPosition -= loopWidth;
-    } else if (direction < 0 && scrollPosition <= 0) {
-      scrollPosition += loopWidth;
+    if (y < -cardHeight - FLOATING_WALL_CARD_GAP) {
+      applyFloatingPlacement(item, { startBelow: true });
+      return;
     }
 
-    row.dataset.scrollPosition = String(scrollPosition);
-    row.scrollLeft = scrollPosition;
+    item.dataset.y = String(y);
+    item.style.transform = `translate3d(${x}px, ${y}px, 0) rotate(${rotation}deg)`;
   });
+
+  keepFloatingColumnsSeparated(canvas);
 
   galleryAutoplayFrame = requestAnimationFrame(runGalleryAutoplay);
 }
 
-function getRowLoopWidth(row) {
-  const firstClone = row.querySelector('[data-clone="true"]');
-  if (!firstClone || !row.firstElementChild) return 0;
-  return firstClone.offsetLeft - row.firstElementChild.offsetLeft;
+function keepFloatingColumnsSeparated(canvas) {
+  const spacing = getFloatingWallSpacing();
+  const columns = new Map();
+  Array.from(canvas.querySelectorAll(".floating-memory-wall__item")).forEach((item) => {
+    const column = item.dataset.floatColumn || "0";
+    const columnItems = columns.get(column) || [];
+    columnItems.push(item);
+    columns.set(column, columnItems);
+  });
+
+  columns.forEach((columnItems) => {
+    columnItems
+      .sort((firstItem, secondItem) => Number(firstItem.dataset.y || 0) - Number(secondItem.dataset.y || 0))
+      .forEach((item, index, sortedItems) => {
+        if (index === 0) return;
+
+        const previousItem = sortedItems[index - 1];
+        const previousY = Number(previousItem.dataset.y || 0);
+        const previousHeight = getFloatingItemBounds(previousItem).height;
+        const minimumY = previousY + previousHeight + spacing.y;
+        const currentY = Number(item.dataset.y || 0);
+        if (currentY >= minimumY) return;
+
+        const x = Number(item.dataset.x || 0);
+        const rotation = Number(item.dataset.rotation || 0);
+        item.dataset.y = String(minimumY);
+        item.style.transform = `translate3d(${x}px, ${minimumY}px, 0) rotate(${rotation}deg)`;
+      });
+  });
 }
 
 function scheduleGalleryAutoplay(delay = 2400) {
@@ -760,9 +1158,6 @@ function scheduleGalleryAutoplay(delay = 2400) {
   if (!canAutoplayGallery()) return;
 
   galleryResumeTimer = window.setTimeout(() => {
-    memoryGrid.querySelectorAll(".memory-row").forEach((row) => {
-      row.dataset.scrollPosition = String(row.scrollLeft);
-    });
     galleryAutoplayStartedAt = performance.now();
     galleryAutoplayFrame = requestAnimationFrame(runGalleryAutoplay);
   }, delay);
@@ -1190,6 +1585,23 @@ window.addEventListener("scroll", () => {
   const showFloatingShare = window.scrollY > window.innerHeight * 0.78;
   floatingShare.classList.toggle("is-visible", showFloatingShare);
 }, { passive: true });
+
+window.addEventListener("resize", () => {
+  if (floatingWallResizeTimer) {
+    window.clearTimeout(floatingWallResizeTimer);
+  }
+  floatingWallResizeTimer = window.setTimeout(() => {
+    if (memories.length > 0 && getFloatingWallCanvas()) {
+      renderMemories();
+    }
+  }, 180);
+}, { passive: true });
+
+reduceMotionQuery.addEventListener?.("change", () => {
+  if (memories.length > 0 && getFloatingWallCanvas()) {
+    renderMemories();
+  }
+});
 
 if (reduceMotionQuery.matches) {
   revealSections.forEach((section) => section.classList.add("is-visible"));
