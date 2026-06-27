@@ -1651,18 +1651,6 @@ h2 {
   isolation: isolate;
 }
 
-.archive-memory-card__image-frame::after {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 1;
-  height: 58%;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0));
-  content: "";
-  pointer-events: none;
-}
-
 .archive-memory-card__image {
   display: block;
   width: 100%;
@@ -1672,44 +1660,35 @@ h2 {
 
 .archive-memory-card__body {
   flex: 0 0 auto;
-  padding: 16px 5px 0;
+  padding: 14px 5px 0;
 }
 
 .archive-memory-card__message {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 2;
-  width: 100%;
-  margin: 0;
-  padding: 16px;
-  color: #ffffff;
+  margin: 0 0 10px;
+  color: var(--navy-800);
   font-family: var(--handwritten);
-  font-size: 1.26rem;
+  font-size: 1.12rem;
   font-weight: 600;
-  line-height: 1.18;
+  line-height: 1.16;
   overflow: hidden;
   text-align: left;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.54);
-  pointer-events: none;
 }
 
 .archive-memory-card__message-text {
   display: -webkit-box;
-  max-height: 3.54em;
+  max-height: 2.32em;
   overflow: hidden;
   overflow-wrap: anywhere;
   word-break: break-word;
   hyphens: auto;
   white-space: normal;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .archive-memory-card__attribution {
-  min-height: 74px;
+  min-height: 64px;
   padding-top: 2px;
 }
 
@@ -2459,7 +2438,7 @@ h2 {
   }
 
   .floating-memory-wall {
-    height: clamp(1020px, 116vh, 1120px);
+    height: clamp(1120px, 128vh, 1240px);
   }
 
   .memory-gallery::before {
@@ -2467,7 +2446,7 @@ h2 {
   }
 
   .floating-memory-wall__item {
-    width: min(42vw, 160px);
+    width: clamp(178px, 56vw, 218px);
   }
 
   .memory-card {
@@ -2535,6 +2514,7 @@ h2 {
   }
 
   .archive-grid {
+    grid-template-columns: 1fr;
     gap: 14px;
   }
 
@@ -2562,13 +2542,13 @@ h2 {
   }
 
   .archive-memory-card__message {
-    padding: 14px;
-    font-size: 1.16rem;
-    line-height: 1.18;
+    margin-bottom: 9px;
+    font-size: 1.02rem;
+    line-height: 1.16;
   }
 
   .archive-memory-card__attribution {
-    min-height: 66px;
+    min-height: 58px;
   }
 
   .archive-memory-card__name {
@@ -2647,10 +2627,6 @@ h2 {
 
   .hero__cta {
     font-size: clamp(22px, 6vw, 26px);
-  }
-
-  .archive-grid {
-    grid-template-columns: 1fr;
   }
 
   .admin-memory-grid {

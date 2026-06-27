@@ -50,50 +50,6 @@ const MEMORY_SELECT_FIELDS_WITHOUT_IMAGE_URL = "id, photo_url, original_image_ur
 const LEGACY_MEMORY_SELECT_FIELDS = "id, photo_url, message, name, anonymous, created_at";
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const isAdminMode = false;
-const SAMPLE_MEMORIES = [
-  {
-    id: "sample-memory-toast",
-    image: "./assets/mockups/memory-toast.png",
-    photo_url: "./assets/mockups/memory-toast.png",
-    original_image_url: "./assets/mockups/memory-toast.png",
-    optimized_image_url: "./assets/mockups/memory-toast.png",
-    image_url: "./assets/mockups/memory-toast.png",
-    downloadImage: "./assets/mockups/memory-toast.png",
-    message: "To a lifetime of soft mornings, bright horizons, and always choosing each other.",
-    name: "Mara",
-    anonymous: false,
-    created_at: "2026-06-27T00:00:00.000Z",
-    isSample: true
-  },
-  {
-    id: "sample-memory-rings",
-    image: "./assets/mockups/memory-rings.png",
-    photo_url: "./assets/mockups/memory-rings.png",
-    original_image_url: "./assets/mockups/memory-rings.png",
-    optimized_image_url: "./assets/mockups/memory-rings.png",
-    image_url: "./assets/mockups/memory-rings.png",
-    downloadImage: "./assets/mockups/memory-rings.png",
-    message: "The most beautiful yes, sealed by the sea and everyone who loves you.",
-    name: "Nico",
-    anonymous: false,
-    created_at: "2026-06-27T00:01:00.000Z",
-    isSample: true
-  },
-  {
-    id: "sample-memory-dance",
-    image: "./assets/mockups/memory-dance.png",
-    photo_url: "./assets/mockups/memory-dance.png",
-    original_image_url: "./assets/mockups/memory-dance.png",
-    optimized_image_url: "./assets/mockups/memory-dance.png",
-    image_url: "./assets/mockups/memory-dance.png",
-    downloadImage: "./assets/mockups/memory-dance.png",
-    message: "May every tide bring you back to laughter, dancing, and home.",
-    name: "A guest",
-    anonymous: true,
-    created_at: "2026-06-27T00:02:00.000Z",
-    isSample: true
-  }
-];
 
 messageInput.maxLength = MESSAGE_LIMIT;
 
@@ -109,16 +65,20 @@ let galleryAutoplayFrame = null;
 let galleryResumeTimer = null;
 let galleryAutoplayStartedAt = 0;
 let floatingWallResizeTimer = null;
+let floatingWallBreakpoint = null;
+let floatingWallViewportWidth = window.innerWidth;
+let floatingWallViewportHeight = window.innerHeight;
 const selectedMemoryIds = new Set();
+const floatingLayoutCache = new Map();
 const FLOATING_WALL_LIMITS = {
   desktop: 24,
   tablet: 16,
-  mobile: 8
+  mobile: 10
 };
 const FLOATING_WALL_CARD_GAP = 22;
 const FLOATING_WALL_SPEED = {
-  min: 0.18,
-  max: 0.38
+  min: 0.26,
+  max: 0.52
 };
 const FLOATING_WALL_ROTATION = {
   desktop: 8,
@@ -595,31 +555,19 @@ async function loadMemories() {
     }
 
     memories = (data || []).map(mapSupabaseMemory);
-    if (memories.length === 0 && !isAdminMode) {
-      memories = SAMPLE_MEMORIES;
-      totalMemoryCount = SAMPLE_MEMORIES.length;
-    } else {
-      totalMemoryCount = count || memories.length;
-    }
+    totalMemoryCount = count || memories.length;
     renderMemories();
   } catch (error) {
-    if (!isAdminMode) {
-      memories = SAMPLE_MEMORIES;
-      totalMemoryCount = SAMPLE_MEMORIES.length;
-      renderMemories();
-    } else {
-      memoryGrid.innerHTML = `
-        <p class="wall-status wall-status--error">
-          We could not load the Love Wall yet. Please refresh and try again.
-        </p>
-      `;
-    }
+    memoryGrid.innerHTML = `
+      <p class="wall-status wall-status--error">
+        We could not load the Love Wall yet. Please refresh and try again.
+      </p>
+    `;
     console.error(error);
   }
 }
 
 function renderMemories() {
-  memoryGrid.innerHTML = "";
   updateHeroMemoryCounter();
   createAdminToolbar();
   stopGalleryAutoplay();
@@ -630,13 +578,18 @@ function renderMemories() {
   });
 
   if (memories.length === 0) {
+    memoryGrid.innerHTML = "";
     memoryGrid.innerHTML = '<p class="wall-status">No memories have been shared yet.</p>';
     updateAdminSelectionUi();
     return;
   }
 
   memoryGrid.classList.add("memory-grid--floating");
-  memoryGrid.append(createFloatingWallCanvas());
+  if (!getFloatingWallCanvas()) {
+    memoryGrid.innerHTML = "";
+    memoryGrid.append(createFloatingWallCanvas());
+  }
+  floatingWallBreakpoint = getFloatingWallMode();
   fillFloatingWall();
   observeMemoryCards();
   scheduleGalleryAutoplay(700);
@@ -733,7 +686,7 @@ function getFloatingWallSpacing() {
   if (mode === "mobile") {
     return {
       x: 14,
-      y: 34
+      y: 22
     };
   }
   if (mode === "tablet") {
@@ -748,21 +701,10 @@ function getFloatingWallSpacing() {
   };
 }
 
-function getFloatingWallCapacity(canvas) {
-  if (!canvas || memories.length === 0) return 0;
-
-  const probe = document.createElement("div");
-  probe.className = "floating-memory-wall__item floating-memory-wall__item--probe";
-  probe.append(createMemoryCard(memories[0], 0, true));
-  canvas.append(probe);
-  const { slots } = buildFloatingSlots(canvas, probe);
-  probe.remove();
-  return Math.max(1, slots.length);
-}
-
 function getFloatingDisplayList(displayCount) {
   return Array.from({ length: displayCount }, (_, index) => ({
     memory: memories[index % memories.length],
+    index,
     isClone: index >= memories.length
   }));
 }
@@ -770,6 +712,37 @@ function getFloatingDisplayList(displayCount) {
 function fillFloatingWall() {
   const canvas = getFloatingWallCanvas();
   if (!canvas) return;
+
+  const displayLimit = getFloatingWallLimit();
+  const displayCount = Math.max(1, displayLimit);
+  const displayList = getFloatingDisplayList(displayCount);
+  const desiredLayoutKeys = new Set(displayList.map(({ memory, index, isClone }) => (
+    getFloatingLayoutKey(memory, index, isClone)
+  )));
+
+  Array.from(canvas.querySelectorAll(".floating-memory-wall__item:not(.floating-memory-wall__item--probe)"))
+    .forEach((item) => {
+      if (!desiredLayoutKeys.has(item.dataset.layoutKey)) {
+        item.remove();
+      }
+    });
+
+  const missingItems = displayList.filter(({ memory, index, isClone }) => (
+    !getFloatingItemByLayoutKey(canvas, getFloatingLayoutKey(memory, index, isClone))
+  ));
+
+  if (missingItems.length === 0) {
+    displayList.forEach(({ memory, index, isClone }) => {
+      const layoutKey = getFloatingLayoutKey(memory, index, isClone);
+      const existingItem = getFloatingItemByLayoutKey(canvas, layoutKey);
+      if (!existingItem) return;
+
+      existingItem.dataset.floatIndex = String(index);
+      existingItem.dataset.floatTotal = String(displayCount);
+      syncFloatingItemLayout(existingItem);
+    });
+    return;
+  }
 
   const probe = document.createElement("div");
   probe.className = "floating-memory-wall__item floating-memory-wall__item--probe";
@@ -779,18 +752,33 @@ function fillFloatingWall() {
   probe.remove();
 
   const shuffledSlots = shuffleItems(slots);
-  const displayLimit = Math.min(getFloatingWallLimit(), Math.max(1, shuffledSlots.length));
-  const displayCount = Math.max(1, displayLimit);
-  const displayList = getFloatingDisplayList(displayCount);
-  displayList.forEach(({ memory, isClone }, index) => {
+  displayList.forEach(({ memory, index, isClone }) => {
+    const layoutKey = getFloatingLayoutKey(memory, index, isClone);
+    const existingItem = getFloatingItemByLayoutKey(canvas, layoutKey);
+    if (existingItem) {
+      existingItem.dataset.floatIndex = String(index);
+      existingItem.dataset.floatTotal = String(displayCount);
+      syncFloatingItemLayout(existingItem);
+      return;
+    }
+
     appendFloatingMemory(memory, {
       index,
       total: displayCount,
-      slot: shuffledSlots[index],
+      slot: shuffledSlots[index % Math.max(1, shuffledSlots.length)],
       isClone,
-      startBelow: false
+      startBelow: index >= shuffledSlots.length
     });
   });
+}
+
+function getFloatingLayoutKey(memory, index = 0, isClone = false) {
+  return isClone ? `${memory.id}-loop-${index}` : memory.id;
+}
+
+function getFloatingItemByLayoutKey(canvas, layoutKey) {
+  return Array.from(canvas.querySelectorAll(".floating-memory-wall__item:not(.floating-memory-wall__item--probe)"))
+    .find((item) => item.dataset.layoutKey === layoutKey);
 }
 
 function randomBetween(min, max) {
@@ -912,14 +900,12 @@ function chooseFloatingPosition(item, options = {}) {
   const index = Number(item.dataset.floatIndex || 0);
   const mode = getFloatingWallMode();
   const orderedSlots = slots.length ? slots : [{ column: 0, row: 0, x: safeArea.minX, y: safeArea.minY }];
-  const jitterX = mode === "mobile" ? 0 : spacing.x * 0.52;
+  const mobileHorizontalRange = Math.max(0, safeArea.maxX - safeArea.minX);
+  const jitterX = mode === "mobile" ? mobileHorizontalRange * 0.5 : spacing.x * 0.52;
   const jitterY = mode === "mobile" ? spacing.y * 0.82 : spacing.y * 0.46;
 
   if (!options.startBelow && options.slot) {
-    const x = Math.max(
-      safeArea.minX,
-      Math.min(safeArea.maxX, options.slot.x + randomBetween(-jitterX, jitterX))
-    );
+    const x = getFloatingVisualX(item, options.slot.x, safeArea, spacing);
     const y = Math.max(
       safeArea.minY,
       Math.min(safeArea.maxY, options.slot.y + randomBetween(-jitterY, jitterY))
@@ -932,26 +918,30 @@ function chooseFloatingPosition(item, options = {}) {
   }
 
   if (options.startBelow) {
-    const preferredColumn = Number(item.dataset.floatColumn);
-    const columnSlots = Number.isFinite(preferredColumn)
-      ? orderedSlots.filter((slot) => slot.column === preferredColumn)
-      : [];
-    const candidateSlot = shuffleItems(columnSlots.length ? columnSlots : orderedSlots)[0];
-    const columnItems = Array.from(canvas.querySelectorAll(".floating-memory-wall__item"))
-      .filter((otherItem) => otherItem !== item && Number(otherItem.dataset.floatColumn) === candidateSlot.column);
-    const columnBottom = columnItems.reduce((bottom, otherItem) => {
-      const y = Number(otherItem.dataset.y);
-      if (!Number.isFinite(y)) return bottom;
-      const { height } = getFloatingItemBounds(otherItem);
-      return Math.max(bottom, y + height);
-    }, safeArea.canvasRect.height);
-    const x = Math.max(
-      safeArea.minX,
-      Math.min(safeArea.maxX, candidateSlot.x + randomBetween(-jitterX, jitterX))
-    );
+    const visibleBottom = getFloatingVisibleBottom(canvas, safeArea);
+    const columns = [...new Set(orderedSlots.map((slot) => slot.column))];
+    const candidateColumns = shuffleItems(columns.length ? columns : [0])
+      .map((column) => {
+        const slot = shuffleItems(orderedSlots.filter((currentSlot) => currentSlot.column === column))[0] || orderedSlots[0];
+        const columnItems = Array.from(canvas.querySelectorAll(".floating-memory-wall__item"))
+          .filter((otherItem) => otherItem !== item && Number(otherItem.dataset.floatColumn) === slot.column);
+        const columnBottom = columnItems.reduce((bottom, otherItem) => {
+          const y = Number(otherItem.dataset.y);
+          if (!Number.isFinite(y)) return bottom;
+          const { height } = getFloatingItemBounds(otherItem);
+          return Math.max(bottom, y + height);
+        }, visibleBottom - spacing.y);
+        return {
+          slot,
+          columnBottom
+        };
+      })
+      .sort((firstColumn, secondColumn) => firstColumn.columnBottom - secondColumn.columnBottom);
+    const { slot: candidateSlot, columnBottom } = candidateColumns[0];
+    const x = getFloatingVisualX(item, candidateSlot.x, safeArea, spacing);
     const belowY = Math.max(
-      safeArea.canvasRect.height + randomBetween(spacing.y * 0.6, spacing.y * 1.25),
-      columnBottom + spacing.y + randomBetween(0, jitterY)
+      visibleBottom + randomBetween(spacing.y * 0.25, spacing.y * 0.9),
+      columnBottom + spacing.y + randomBetween(0, jitterY * 0.7)
     );
     return {
       x,
@@ -962,7 +952,7 @@ function chooseFloatingPosition(item, options = {}) {
 
   for (let attempt = 0; attempt < orderedSlots.length; attempt += 1) {
     const slot = orderedSlots[(index + attempt) % orderedSlots.length];
-    const x = Math.max(safeArea.minX, Math.min(safeArea.maxX, slot.x + randomBetween(-jitterX, jitterX)));
+    const x = getFloatingVisualX(item, slot.x, safeArea, spacing);
     const y = Math.max(safeArea.minY, Math.min(safeArea.maxY, slot.y + randomBetween(-jitterY, jitterY)));
     const candidateRect = {
       left: x,
@@ -989,22 +979,104 @@ function chooseFloatingPosition(item, options = {}) {
   };
 }
 
+function getFloatingVisualX(item, slotX, safeArea, spacing) {
+  const mode = getFloatingWallMode();
+  const minX = safeArea.minX;
+  const maxX = safeArea.maxX;
+  const usableX = Math.max(0, maxX - minX);
+  const index = Number(item.dataset.floatIndex || 0);
+
+  if (mode === "mobile" && usableX > 20) {
+    const anchors = [0.08, 0.82, 0.45, 0.2, 0.68, 0.34, 0.92, 0.56];
+    const anchor = anchors[index % anchors.length];
+    const jitter = Math.min(usableX * 0.1, 14);
+    return Math.max(minX, Math.min(maxX, minX + usableX * anchor + randomBetween(-jitter, jitter)));
+  }
+
+  const jitterX = spacing.x * 0.52;
+  return Math.max(minX, Math.min(maxX, slotX + randomBetween(-jitterX, jitterX)));
+}
+
+function getFloatingVisibleBottom(canvas, safeArea) {
+  const canvasRect = safeArea?.canvasRect || canvas.getBoundingClientRect();
+  const viewportBottom = window.innerHeight - canvasRect.top;
+  const visibleBottom = Math.max(0, Math.min(canvasRect.height, viewportBottom));
+  return Math.max(visibleBottom, Math.min(canvasRect.height, window.innerHeight * 0.72));
+}
+
 function applyFloatingPlacement(item, options = {}) {
   const canvas = getFloatingWallCanvas();
   if (!canvas) return;
 
   const mode = getFloatingWallMode();
+  const layoutKey = item.dataset.layoutKey || item.dataset.memoryId;
+  const cachedLayout = floatingLayoutCache.get(layoutKey);
+  if (cachedLayout && cachedLayout.sizeVariant === mode && !options.regenerate) {
+    applyFloatingLayout(item, cachedLayout);
+    return;
+  }
+
   const { x, y, column } = chooseFloatingPosition(item, options);
   const rotationLimit = FLOATING_WALL_ROTATION[mode];
   const rotation = randomBetween(-rotationLimit, rotationLimit);
   const speed = randomBetween(FLOATING_WALL_SPEED.min, FLOATING_WALL_SPEED.max);
+  const delay = Math.min(Number(item.dataset.floatIndex || 0) * 70, 280);
+  const layout = {
+    x,
+    y,
+    rotation,
+    speed,
+    delay,
+    lane: column,
+    sizeVariant: mode
+  };
+  floatingLayoutCache.set(layoutKey, layout);
+  applyFloatingLayout(item, layout);
+}
 
-  item.dataset.x = String(x);
-  item.dataset.y = String(y);
-  item.dataset.floatColumn = String(column);
-  item.dataset.rotation = String(rotation);
-  item.dataset.speed = String(speed);
-  item.style.transform = `translate3d(${x}px, ${y}px, 0) rotate(${rotation}deg)`;
+function applyCachedFloatingLayout(item) {
+  const layoutKey = item.dataset.layoutKey || item.dataset.memoryId;
+  const cachedLayout = floatingLayoutCache.get(layoutKey);
+  if (cachedLayout) {
+    applyFloatingLayout(item, cachedLayout);
+  }
+}
+
+function syncFloatingItemLayout(item) {
+  const layoutKey = item.dataset.layoutKey || item.dataset.memoryId;
+  const cachedLayout = floatingLayoutCache.get(layoutKey);
+  if (!cachedLayout) {
+    applyFloatingPlacement(item);
+    return;
+  }
+
+  if (cachedLayout.sizeVariant !== getFloatingWallMode()) {
+    applyFloatingPlacement(item, { regenerate: true });
+    return;
+  }
+
+  applyFloatingLayout(item, cachedLayout);
+}
+
+function applyFloatingLayout(item, layout) {
+  item.dataset.x = String(layout.x);
+  item.dataset.y = String(layout.y);
+  item.dataset.floatColumn = String(layout.lane);
+  item.dataset.rotation = String(layout.rotation);
+  item.dataset.speed = String(layout.speed);
+  item.style.transform = `translate3d(${layout.x}px, ${layout.y}px, 0) rotate(${layout.rotation}deg)`;
+  item.querySelector(".memory-card")?.style.setProperty("--card-reveal-delay", `${layout.delay}ms`);
+}
+
+function updateFloatingLayoutCache(item, updates) {
+  const layoutKey = item.dataset.layoutKey || item.dataset.memoryId;
+  const cachedLayout = floatingLayoutCache.get(layoutKey);
+  if (!cachedLayout) return;
+
+  floatingLayoutCache.set(layoutKey, {
+    ...cachedLayout,
+    ...updates
+  });
 }
 
 function appendFloatingMemory(memory, options = {}) {
@@ -1014,6 +1086,7 @@ function appendFloatingMemory(memory, options = {}) {
   const item = document.createElement("div");
   item.className = "floating-memory-wall__item";
   item.dataset.memoryId = memory.id;
+  item.dataset.layoutKey = getFloatingLayoutKey(memory, options.index || 0, options.isClone);
   item.dataset.floatIndex = String(options.index || 0);
   item.dataset.floatTotal = String(options.total || getFloatingWallLimit());
   if (options.isClone) {
@@ -1023,7 +1096,8 @@ function appendFloatingMemory(memory, options = {}) {
   canvas.append(item);
   applyFloatingPlacement(item, {
     slot: options.slot,
-    startBelow: options.startBelow
+    startBelow: options.startBelow,
+    regenerate: options.regenerate
   });
   return item;
 }
@@ -1044,7 +1118,7 @@ function addMemoryToWall(memory) {
     return;
   }
 
-  const visibleLimit = Math.min(getFloatingWallLimit(), getFloatingWallCapacity(canvas));
+  const visibleLimit = getFloatingWallLimit();
   const visibleItems = canvas.querySelectorAll(".floating-memory-wall__item");
   if (visibleItems.length >= visibleLimit) {
     visibleItems[visibleItems.length - 1].remove();
@@ -1052,7 +1126,8 @@ function addMemoryToWall(memory) {
   const item = appendFloatingMemory(memory, {
     index: 0,
     total: visibleLimit,
-    startBelow: true
+    startBelow: true,
+    regenerate: true
   });
   item?.querySelector(".memory-card")?.classList.add("is-visible");
   updateAdminSelectionUi();
@@ -1109,12 +1184,16 @@ function runGalleryAutoplay() {
     y -= speed;
 
     if (y < -cardHeight - FLOATING_WALL_CARD_GAP) {
-      applyFloatingPlacement(item, { startBelow: true });
+      applyFloatingPlacement(item, {
+        startBelow: true,
+        regenerate: true
+      });
       return;
     }
 
     item.dataset.y = String(y);
     item.style.transform = `translate3d(${x}px, ${y}px, 0) rotate(${rotation}deg)`;
+    updateFloatingLayoutCache(item, { y });
   });
 
   keepFloatingColumnsSeparated(canvas);
@@ -1149,6 +1228,7 @@ function keepFloatingColumnsSeparated(canvas) {
         const rotation = Number(item.dataset.rotation || 0);
         item.dataset.y = String(minimumY);
         item.style.transform = `translate3d(${x}px, ${minimumY}px, 0) rotate(${rotation}deg)`;
+        updateFloatingLayoutCache(item, { y: minimumY });
       });
   });
 }
@@ -1591,7 +1671,13 @@ window.addEventListener("resize", () => {
     window.clearTimeout(floatingWallResizeTimer);
   }
   floatingWallResizeTimer = window.setTimeout(() => {
-    if (memories.length > 0 && getFloatingWallCanvas()) {
+    const nextBreakpoint = getFloatingWallMode();
+    const breakpointChanged = floatingWallBreakpoint && nextBreakpoint !== floatingWallBreakpoint;
+    floatingWallViewportWidth = window.innerWidth;
+    floatingWallViewportHeight = window.innerHeight;
+
+    if (memories.length > 0 && getFloatingWallCanvas() && breakpointChanged) {
+      floatingLayoutCache.clear();
       renderMemories();
     }
   }, 180);
@@ -1599,6 +1685,7 @@ window.addEventListener("resize", () => {
 
 reduceMotionQuery.addEventListener?.("change", () => {
   if (memories.length > 0 && getFloatingWallCanvas()) {
+    floatingLayoutCache.clear();
     renderMemories();
   }
 });

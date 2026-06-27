@@ -70,11 +70,11 @@ function createArchiveCard(memory) {
   card.innerHTML = `
     <div class="archive-memory-card__image-frame">
       <img class="archive-memory-card__image" src="${memory.image}" alt="Wedding memory shared by ${escapeHtml(memory.name)}" loading="lazy" decoding="async">
+    </div>
+    <div class="archive-memory-card__body">
       <p class="archive-memory-card__message">
         <span class="archive-memory-card__message-text">${escapeHtml(displayMessage)}</span>
       </p>
-    </div>
-    <div class="archive-memory-card__body">
       <div class="archive-memory-card__attribution">
         <span class="archive-memory-card__label">FROM:</span>
         <span class="archive-memory-card__name">${escapeHtml(memory.name)}</span>
