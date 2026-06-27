@@ -520,6 +520,8 @@ async function insertMemory(memoryPayload) {
 }
 
 async function loadMemories() {
+  memoryGallery?.classList.add("memory-gallery--empty");
+  memoryGrid.classList.remove("memory-grid--floating");
   memoryGrid.innerHTML = '<p class="wall-status">Loading shared memories...</p>';
 
   try {
@@ -558,6 +560,8 @@ async function loadMemories() {
     totalMemoryCount = count || memories.length;
     renderMemories();
   } catch (error) {
+    memoryGallery?.classList.add("memory-gallery--empty");
+    memoryGrid.classList.remove("memory-grid--floating");
     memoryGrid.innerHTML = `
       <p class="wall-status wall-status--error">
         We could not load the Love Wall yet. Please refresh and try again.
@@ -578,12 +582,15 @@ function renderMemories() {
   });
 
   if (memories.length === 0) {
+    memoryGallery?.classList.add("memory-gallery--empty");
+    memoryGrid.classList.remove("memory-grid--floating");
     memoryGrid.innerHTML = "";
     memoryGrid.innerHTML = '<p class="wall-status">No memories have been shared yet.</p>';
     updateAdminSelectionUi();
     return;
   }
 
+  memoryGallery?.classList.remove("memory-gallery--empty");
   memoryGrid.classList.add("memory-grid--floating");
   if (!getFloatingWallCanvas()) {
     memoryGrid.innerHTML = "";

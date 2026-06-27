@@ -1136,6 +1136,13 @@ h2 {
   overflow: hidden;
 }
 
+.memory-gallery--empty {
+  min-height: clamp(620px, 78vh, 860px);
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(248, 244, 236, 0.62) 42%, rgba(255, 255, 255, 0.94)),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0) 18% 82%, rgba(255, 255, 255, 0.84));
+}
+
 .memory-gallery::before {
   position: absolute;
   inset: 0 0 auto;
@@ -1163,6 +1170,15 @@ h2 {
   display: block;
   padding-block: 8px 10px;
   min-width: 0;
+}
+
+.memory-gallery--empty .memory-grid {
+  position: relative;
+  z-index: 5;
+  display: grid;
+  min-height: inherit;
+  place-items: center;
+  padding: clamp(220px, 34vh, 300px) 16px clamp(116px, 18vh, 164px);
 }
 
 .memory-grid--floating {
@@ -1319,6 +1335,18 @@ h2 {
   color: var(--muted);
   background: rgba(255, 255, 255, 0.68);
   text-align: center;
+}
+
+.memory-gallery--empty .wall-status {
+  width: min(640px, 100%);
+  margin: 0 auto;
+  padding: clamp(22px, 5vw, 34px);
+  border-color: rgba(23, 48, 74, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(250, 247, 241, 0.82));
+  box-shadow:
+    0 18px 38px rgba(15, 34, 56, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
 }
 
 .wall-status--error {
@@ -2427,8 +2455,16 @@ h2 {
     margin-left: -50vw;
   }
 
+  .memory-gallery--empty {
+    min-height: clamp(640px, 86vh, 780px);
+  }
+
   .memory-grid {
     padding-block: 0;
+  }
+
+  .memory-gallery--empty .memory-grid {
+    padding: 260px 12px 120px;
   }
 
   .wall-section__actions {
